@@ -1,0 +1,559 @@
+---
+title: Educational Technology Project - HCI (Fall 2016) Data Analysis
+output:
+  pdf_document: default
+  html_document: default
+---
+
+###Process Data###
+```{r setup, echo=TRUE, results='hide', warning=FALSE}
+# Set cwd
+setwd("D:/Documents/Data Science/Educational Technology/R/hci")
+#setwd("E:/Educational Technology/R/HCI")
+getwd()
+
+# Load libraries
+library(plyr)
+library(tools)
+library(ggplot2)
+
+# Read in survey data sets
+CS6750_fall16_soc = read.csv('Survey_CS6750_FALL16_SOC.csv')
+CS6750_fall16_qc = read.csv('Survey_CS6750_FALL16_QC.csv')
+CS6750_fall16_mc = read.csv('Survey_CS6750_FALL16_MC.csv')
+CS6750_fall16_eoc = read.csv('Survey_CS6750_FALL16_EOC.csv')
+
+# Read in grade data sets
+grades = read.csv('Grades_CS6750_FALL16.csv', na.strings="")
+```
+
+```{r process data, echo=TRUE, results = 'hide'}
+
+# Create data subsets containing information of interest and change names
+# CS6750 - HCI
+CS6750_fall16_soc = CS6750_fall16_soc[, c(1, 2, 3, 4, 5, 7, 8, 11)]
+colnames(CS6750_fall16_soc) = c("student", "age", "gender", "birth", "residence", 
+                                "language", "english", "education")
+
+CS6750_fall16_qc = CS6750_fall16_qc[, c(1, 2, 3)]
+colnames(CS6750_fall16_qc) = c("student", "conf_p1_post", "conf_p2_pre")
+
+CS6750_fall16_mc = CS6750_fall16_mc[, c(1, 2, 3)]
+colnames(CS6750_fall16_mc) = c("student", "conf_p2_post", "conf_p3_pre")
+
+CS6750_fall16_eoc = CS6750_fall16_eoc[, c(1, 3, 2)]
+colnames(CS6750_fall16_eoc) = c("student", "hours", "conf_p3_post")
+
+colnames(grades) = c("student", "assign_p1", "assign_p2", "assign_p3", "assign_p4",
+                     "assign_p5", "assign_m1", "assign_m2", "assign_m3", "extra",
+                     "assign_m4", "assign_m5", "project", "feedback", "test1", "test2") 
+
+# Create grade summary variables
+grades$assign_ave = 100*(grades$assign_p1 + grades$assign_p2 +
+      grades$assign_p3 + grades$assign_p4 + grades$assign_p5 +
+      grades$assign_m1 + grades$assign_m2 + grades$assign_m3 +
+      grades$assign_m4 + grades$assign_m5)/200
+
+grades$test_ave = 100*(grades$test1 + grades$test2)/200
+
+grades$total = (grades$assign_ave*0.4 + grades$test_ave*0.3 + 
+                  grades$project*0.2 + grades$feedback*0.1)
+
+# Drop unnecessary fields from grades dataframe
+grades = grades[,c("student", "assign_ave", "test_ave", "project", "feedback",
+                   "total")]
+
+# Merge HCI datasets
+hci = merge(x = CS6750_fall16_soc, y = CS6750_fall16_qc, by = "student", all.x = TRUE)
+hci = merge(x = hci, y = CS6750_fall16_mc, by = "student", all.x = TRUE)
+hci = merge(x = hci, y = CS6750_fall16_eoc, by = "student", all.x = TRUE)
+hci = merge(x = hci, y = grades, by = "student", all.x = TRUE)
+
+hci$semester = "Fall 2016"
+
+hci$course = "HCI"
+
+# Drop unneeded datasets
+rm(CS6750_fall16_soc, CS6750_fall16_qc, CS6750_fall16_mc, CS6750_fall16_eoc, grades)
+
+# Replace blanks with NA
+is.na(hci) = (hci=="")
+
+# Convert factors into character strings
+hci$student = as.character(hci$student)
+hci$birth = as.character(hci$birth)
+hci$residence = as.character(hci$residence)
+hci$language = as.character(hci$language)
+
+# Drop blank factor levels
+hci$age = factor(hci$age)
+hci$gender = factor(hci$gender)
+hci$english = factor(hci$english)
+hci$education = factor(hci$education)
+hci$conf_p1_post = factor(hci$conf_p1_post)
+hci$conf_p2_pre = factor(hci$conf_p2_pre)
+hci$conf_p2_post = factor(hci$conf_p2_post)
+hci$conf_p3_pre = factor(hci$conf_p3_pre)
+hci$conf_p3_post = factor(hci$conf_p3_post)
+hci$hours = factor(hci$hours)
+
+# Simplify level names
+hci$age = revalue(hci$age, c("No Answer" = NA))
+hci$gender = revalue(hci$gender, c("No Answer" = NA))
+hci$english = revalue(hci$english, c("Native speaker"="Native", 
+                          "Fully fluent (non-native speaker)"="Fluent",
+                          "Partially fluent" = "Partial", "No Answer" = NA))
+
+hci$education = revalue(hci$education, c("Bachelors Degree"="Bachelors", 
+                        "Doctoral Degree"="Doctorate", 
+                        "High School (or international equivalent)"="High School",
+                        "Masters Degree" = "Masters", "No Answer" = NA))
+
+hci$conf_p1_post = revalue(hci$conf_p1_post, c("Very confident" = 5, "Somewhat confident"
+                      = 4, "Neither confident nor unconfident" = 3, "Somewhat unconfident"
+                      = 2, "Very unconfident" = 1))
+
+hci$conf_p2_pre = revalue(hci$conf_p2_pre, c("Very confident" = 5, "Somewhat confident"
+                      = 4, "Neither confident nor unconfident" = 3, "Somewhat unconfident"
+                      = 2, "Very unconfident" = 1))
+
+hci$conf_p2_post = revalue(hci$conf_p2_post, c("Very confident" = 5, "Somewhat confident"
+                      = 4, "Neither confident nor unconfident" = 3, "Somewhat unconfident"
+                      = 2, "Very unconfident" = 1, "No Answer" = NA))
+
+hci$conf_p3_pre = revalue(hci$conf_p3_pre, c("Very confident" = 5, "Somewhat confident"
+                      = 4, "Neither confident nor unconfident" = 3, "Somewhat unconfident"
+                      = 2, "Very unconfident" = 1))
+
+hci$conf_p3_post = revalue(hci$conf_p3_post, c("Very confident" = 5, "Somewhat confident"
+                      = 4, "Neither confident nor unconfident" = 3, "Somewhat unconfident"
+                      = 2, "Very unconfident" = 1, "No Answer" = NA))
+
+hci$hours = revalue(hci$hours, c("No Answer" = NA))
+
+hci$hours = revalue(hci$hours, c("<3 hours per week" = "0-3", 
+                "3 - 6 hours per week" = "3-6", "6 - 9 hours per week" = "6-9", 
+                "9 - 12 hours per week" = "9-12", "12 - 15 hours per week" = "12-15", 
+                "15 - 18 hours per week" = "15-18", "18 - 21 hours per week" = "18-21", 
+                "21 or more hours per week" = "21+"))
+
+hci$hours = factor(hci$hours, levels = c("0-3", "3-6", "6-9", "9-12", "12-15",
+                          "15-18", "18-21", "21+"))
+
+hci$age = factor(hci$age, levels = c("Under 18", "18 to 24", "25 to 34", "35 to 44", 
+                                     "45 to 54", "55 to 64"))
+
+hci$course = factor(hci$course, levels = c("KBAI", "HCI", "EduTech"))
+hci$semester = factor(hci$semester, levels = c("Fall 2016", "Summer 2016", 
+                                              "Spring 2016", "Fall 2015", "Summer 2015"))
+
+# Create function for removing "1:" from text fields and convert to title case
+text_split = function(x){
+  x = unlist(strsplit(x, ": "))[2]
+  return(toTitleCase(x))
+}
+
+# Remove "1:" from text fields
+hci$birth = sapply(hci$birth, text_split)
+hci$residence = sapply(hci$residence, text_split)
+hci$language = sapply(hci$language, text_split)
+
+# Get lists of unique values
+#unique(hci$birth)
+#unique(hci$residence)
+#unique(hci$language)
+
+# Clean birth country names
+hci$birth = ifelse(hci$birth %in% c("United States", "USA", "U.S.A.", "US", "Usa",
+                    "Us", "The United States of America", "uSA", "United States of America",
+                    "U.S.", "U.S", "Denver City, Tx", "Ethiopia - US Army Base"), "USA",
+                    hci$birth)
+
+hci$birth = ifelse(hci$birth %in% c("India", "INDIA"), "India", hci$birth)
+hci$birth = ifelse(hci$birth %in% c("China", "People's Republic of China",
+                    "P.R.CHINA", "Hong Kong, SAR", "Hong Kong", "CHINA", "China P.R."),
+                    "China", hci$birth)
+hci$birth = ifelse(hci$birth %in% c("South Korea", "Korea"), "Korea", hci$birth)
+hci$birth = ifelse(hci$birth %in% c("Addis Ababa", "Ethiopia"), "Ethiopia",
+                       hci$birth)
+hci$birth = ifelse(hci$birth %in% c("United Kingdom", "England"), "UK",
+                       hci$birth)
+hci$birth = ifelse(hci$birth == "NA", NA, hci$birth)
+
+# Create alternative birth groupings
+hci$birth2 = hci$birth
+hci$birth2 = ifelse(hci$birth %in% c("Syria", "Taiwan", "Vietnam",
+    "Pakistan", "Japan", "Korea", "Kuwait", "Philippines", "Indonesia", 
+    "Sri Lanka", "Singapore", "Nepal", "Turkey", "Kazakhstan", "Iran",
+    "Afghanistan", "Thailand", "Myanmar", "Lebanon", "Tunisia", "UAE",
+    "Bangladesh", "Qatar", "Malaysia"), "Other Asia", hci$birth2)
+hci$birth2 = ifelse(hci$birth %in% c("Ukraine", "Italy", "Norway",
+    "Serbia", "Moldova", "Czech Republic", "Poland", "Russia", "Switzerland",
+    "Germany", "Bulgaria", "UK", "Finland", "Romania", "Lithuania",
+    "Luxembourg"), "Europe", hci$birth2)
+hci$birth2 = ifelse(hci$birth %in% c("Puerto Rico", "Canada",
+    "Dominican Republic", "Mexico", "Dominica", "El Salvador", "Cuba", 
+    "Haiti", "Bahamas", "Guatemala", "Panama", "Grenada", "Honduras",
+    "Nicaragua", "The Bahamas", "Trinidad and Tobago"), "Other Nth America",
+    hci$birth2)
+hci$birth2 = ifelse(hci$birth %in% c("Peru", "Ecuador", "Colombia",
+    "Brazil", "Argentina", "Chile"), "Sth America", hci$birth2)
+hci$birth2 = ifelse(hci$birth %in% c("Nigeria", "Kenya", 
+    "South Africa", "Ethiopia", "Ghana", "Rwanda"), "Africa", hci$birth2)
+
+hci$birth2 = ifelse(hci$birth %in% c("Australia", "New Zealand"),
+    "Other", hci$birth2)
+
+unique(hci$birth2)
+
+# Clean residence country names
+hci$residence = ifelse(hci$residence %in% c("United States", "USA", "U.S.A.", "US", "Usa",
+                    "The United States of America", "uSA", "United States of America",
+                    "United State", "USa", "Los Angeles", "Houston", "U.S", "U.S.", "YSA",
+                    "Us", "United STates", "America", "JS"), "USA", hci$residence)
+
+hci$residence = ifelse(hci$residence == "NA", NA, hci$residence)
+hci$residence = ifelse(hci$residence == "Myanmar, Hong Kong", "Myanmar", hci$residence)
+hci$residence = ifelse(hci$residence %in% c("China", "Hong Kong"), "China", hci$residence)
+hci$residence = ifelse(hci$residence == "United Kingdom", "UK", hci$residence)
+
+# Clean language
+hci$language = ifelse(hci$language %in% c("English", "American English", "ENGLISH",
+                  "American", "English (US)", "English Language", "Englist", 
+                  "C++, but you Probably Mean \"English\"", "ENGLISH", "En", "JavaScript",
+                  "Elijah", "Dallas", "First", 
+                  "English and French", "English, Cantonese", "Java",
+                  "Conative American Sign Language and English"), "English",
+                  hci$language)
+hci$language = ifelse(hci$language %in% c("Chinese", "Mandarin", "China", 
+                  "Mandarin Chinese", "Cantonese", "Chiinese", "CHINESE", "Manderin", 
+                  "Java", "Python"), "Chinese", hci$language)
+hci$language = ifelse(hci$language %in% c("Marathi", "Telugu", "Bengali", "Gujarati",
+                  "Kannada", "Hindi", "Tamil", "Odiya", "TAMIL", "Punjabi", "Hindo", 
+                  "Indian Language"), "Indian", hci$language)
+hci$language = ifelse(hci$language %in% c("Principal", "Korean", "South Korean"), 
+                  "Korean", hci$language)
+hci$language = ifelse(hci$language == "Farsi/English", "Farsi", hci$language)
+hci$language = ifelse(hci$language == "Spanish/English", "Spanish", hci$language)
+hci$language = ifelse(hci$language %in% c("Swiss German", "German", "Germany"), 
+                  "German", hci$language)
+hci$language = ifelse(hci$language %in% c("Persian", "Persian (Farsi)"), "Farsi",
+                  hci$language)
+hci$language = ifelse(hci$language %in% c("Thai", "ABAP"), "Thai",
+                  hci$language)
+hci$language = ifelse(hci$language == "NA", NA, hci$language)
+
+
+# Create factors
+hci$birth = factor(hci$birth)
+hci$birth2 = factor(hci$birth2)
+hci$residence = factor(hci$residence)
+hci$language = factor(hci$language)
+hci$semester = factor(hci$semester)
+
+# Convert confidence scores to numeric
+hci$conf_p1_post = as.numeric(as.character(hci$conf_p1_post))
+hci$conf_p2_pre = as.numeric(as.character(hci$conf_p2_pre))
+hci$conf_p2_post = as.numeric(as.character(hci$conf_p2_post))
+hci$conf_p3_pre = as.numeric(as.character(hci$conf_p3_pre))
+hci$conf_p3_post = as.numeric(as.character(hci$conf_p3_post))
+
+# Calculate average confidence scores
+hci$conf_ave = (hci$conf_p1_post + hci$conf_p2_pre + hci$conf_p2_post + 
+                   hci$conf_p3_pre + hci$conf_p3_post)/5
+
+hci$conf_pre_ave = (hci$conf_p2_pre + hci$conf_p3_pre)/2
+
+hci$conf_post_ave = (hci$conf_p1_post + hci$conf_p2_post + hci$conf_p3_post)/3
+
+# Convert ranges to numeric values
+hci$age_num = revalue(hci$age, c("18 to 24"=21, "25 to 34"=29.5, "35 to 44"=39.5, 
+                                       "45 to 54"=49.5, "55 to 64"=59.5, "Under 18" = 18))
+hci$age_num = as.numeric(as.character(hci$age_num))
+
+hci$hours_num = revalue(hci$hours, c("0-3"=1.5, "3-6"=4.5, "6-9"=7.5, "9-12"=10.5, 
+                  "12-15"=13.5, "15-18"=16.5, "18-21"=19.5, "21+"=21))
+hci$hours_num = as.numeric(as.character(hci$hours_num))
+
+# Create indicator variables
+hci$native_ind = ifelse(hci$english == "Native", 1, 0)
+hci$higher_ind = ifelse(hci$education %in% c("Masters", "Doctorate"), 1, 0)
+hci$gender_ind = ifelse(hci$gender == "Male", 1, 0)
+
+# Drop NA values
+hci = subset(hci, !is.na(student))
+
+```
+
+###Explore Data###
+```{r Calculate summary statistics}
+
+# Calculate summary statistics
+summary(hci)
+
+# Calculate proportion of class by gender
+prop.table(table(hci$gender))
+
+```
+
+###Analyze Data by Gender###
+```{r Calculate summary statistics by gender}
+
+# Calculate age summary statistics
+ddply(subset(hci, !is.na(age_num) & !is.na(gender)), "gender", summarise, 
+      mean = mean(age_num), 
+      sd = sd(age_num), median = median(age_num), first_q = quantile(age_num, 0.25),
+      third_q = quantile(age_num, 0.75))
+
+# Calculate study hours summary statistics
+ddply(subset(hci, !is.na(gender)&!is.na(hours_num)), "gender", summarise, 
+             mean = mean(hours_num), sd = sd(hours_num), median = median(hours_num), 
+             first_q = quantile(hours_num, 0.25), third_q = quantile(hours_num, 0.75))
+
+# Calculate confidence summary statistics
+ddply(subset(hci, !is.na(gender)&!is.na(conf_ave)), "gender", summarise, 
+             mean = mean(conf_ave), sd = sd(conf_ave), median = median(conf_ave), 
+             first_q = quantile(conf_ave, 0.25), third_q = quantile(conf_ave, 0.75))
+
+# Calculate confidence summary statistics
+ddply(subset(hci, !is.na(gender)&!is.na(conf_pre_ave)), "gender", summarise, 
+             mean = mean(conf_pre_ave), sd = sd(conf_pre_ave), median = median(conf_pre_ave),
+             first_q = quantile(conf_pre_ave, 0.25), third_q = quantile(conf_pre_ave, 0.75))
+
+ddply(subset(hci, !is.na(gender)&!is.na(conf_post_ave)), "gender", summarise, 
+             mean = mean(conf_post_ave), sd = sd(conf_post_ave), 
+             median = median(conf_post_ave), first_q = quantile(conf_post_ave, 0.25), 
+             third_q = quantile(conf_post_ave, 0.75))
+
+# Calculate grade summary statistics
+ddply(subset(hci, !is.na(gender)&!is.na(total)), "gender", summarise, 
+             mean = mean(total), sd = sd(total), 
+             median = median(total), first_q = quantile(total, 0.25), 
+             third_q = quantile(total, 0.75))
+```
+
+
+```{r Compare proportion of the class in each category by gender}
+
+hci_m = subset(hci, gender == "Male")
+hci_f = subset(hci, gender == "Female")
+
+# Compare age
+prop.table(table(hci_m$age))
+prop.table(table(hci_f$age))
+
+# Compare birth country
+prop.table(table(hci_m$birth))
+prop.table(table(hci_f$birth))
+
+# Compare birth country2
+prop.table(table(hci_m$birth2))
+prop.table(table(hci_f$birth2))
+
+# Compare country of residence
+prop.table(table(hci_m$residence))
+prop.table(table(hci_f$residence))
+
+# Compare language background
+prop.table(table(hci_m$language))
+prop.table(table(hci_f$language))
+
+# Compare English skills
+prop.table(table(hci_m$english))
+prop.table(table(hci_f$english))
+
+# Compare education
+prop.table(table(hci_m$education))
+prop.table(table(hci_f$education))
+
+# Compare hours
+prop.table(table(hci_m$hours))
+prop.table(table(hci_f$hours))
+
+```
+
+
+```{r Create graphs comparing distributions by gender}
+
+#Boxplot of age distribution by gender
+ggplot(subset(hci, !is.na(gender)), aes(gender, age_num)) + 
+ geom_boxplot() + 
+ labs(title = "Age Distribution by Gender",
+      x = "Gender", y = "Age") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of hours spent studying by gender
+ggplot(subset(hci, !is.na(hours_num) & !is.na(gender)), aes(gender, hours_num)) + 
+  geom_boxplot() + 
+ labs(title = "Study Hours Distribution by Gender",
+      x = "Gender", y = "Study Hours") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of confidence score by gender
+ggplot(subset(hci, !is.na(conf_ave) & !is.na(gender)), aes(gender, conf_ave)) + 
+  geom_boxplot() + 
+ labs(title = "Confidence Score Distribution by Gender",
+      x = "Gender", y = "Average Confidence Score") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of confidence score (pre-project) by gender
+ggplot(subset(hci, !is.na(conf_pre_ave) & !is.na(gender)), aes(gender,
+    conf_pre_ave)) +  geom_boxplot() + 
+ labs(title = "Confidence Score (Pre-Project) Distribution by Gender",
+      x = "Gender", y = "Average Pre-Project Confidence Score") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of confidence score (post-project) by gender
+ggplot(subset(hci, !is.na(conf_post_ave) & !is.na(gender)), aes(gender,
+    conf_post_ave)) +  geom_boxplot() + 
+ labs(title = "Confidence Score (Post-Project) Distribution by Gender",
+      x = "Gender", y = "Average Post-Project Confidence Score") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Bar chart comparing age by gender
+ggplot(subset(hci, !is.na(gender)), aes(x = age)) + 
+    geom_bar(fill = "blue") + 
+    facet_wrap(~gender, scales = "free_y") +
+    labs(title = "Age Distribution by Gender",
+      x = "Age Band", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Bar chart comparing English skills by gender
+ggplot(subset(hci, !is.na(gender)), aes(x = english)) + 
+    geom_bar(fill = "blue") + 
+    facet_wrap(~gender, scales = "free_y") +
+    labs(title = "English Skills by Gender",
+      x = "English Skills", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Bar chart comparing education by gender
+ggplot(subset(hci, !is.na(gender)), aes(x = education)) + 
+    geom_bar(fill = "blue") + 
+    facet_wrap(~gender, scales = "free_y") +
+    labs(title = "Highest Education Level by Gender",
+      x = "Highest Level of Educational Attainment", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of conf_ave by gender
+ggplot(subset(hci, !is.na(gender)), aes(x = conf_ave)) + 
+    geom_histogram(fill = "blue", binwidth = 0.5) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Confidence Score Distribution by Gender",
+      x = "Average Confidence Score", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of conf_pre_ave by gender
+ggplot(subset(hci, !is.na(gender)), aes(x = conf_pre_ave)) + 
+    geom_histogram(fill = "blue", binwidth = 0.5) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Pre-Project Confidence Score Distribution by Gender",
+      x = "Average Pre-Project Confidence Score", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of conf_post_ave by gender
+ggplot(subset(hci, !is.na(gender)), aes(x = conf_post_ave)) + 
+    geom_histogram(fill = "blue", binwidth = 0.5) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Post-Project Confidence Score Distribution by Gender",
+      x = "Average Post-Project Confidence Score", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of study hours by gender
+ggplot(subset(hci, !is.na(gender)), aes(x = hours_num)) + 
+    geom_histogram(fill = "blue", binwidth = 1) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Study Hours Distribution by Gender",
+      x = "Average Hours Spent Studying per Week", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of grades by gender
+ggplot(subset(hci, !is.na(gender)), aes(x = total)) + 
+    geom_histogram(fill = "blue", binwidth = 2) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Total Grade Distribution by Gender",
+      x = "Total Final Grade", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+```
+
+```{r Hypothesis tests to compare grades and mean age by gender}
+
+# Age tests
+t.test(hci_m$age_num, hci_f$age_num)
+wilcox.test(age_num ~ gender, data=hci) 
+
+# Higher ed tests
+t.test(hci_m$higher_ind, hci_f$higher_ind)
+wilcox.test(higher_ind ~ gender, data=hci) 
+
+# Native speaker test
+t.test(hci_m$native_ind, hci_f$native_ind)
+wilcox.test(native_ind ~ gender, data=hci) 
+
+# Average confidence score tests
+t.test(hci_m$conf_ave, hci_f$conf_ave)
+wilcox.test(conf_ave ~ gender, data=hci) 
+
+# Average pre-project confidence score tests
+t.test(hci_m$conf_pre_ave, hci_f$conf_pre_ave)
+wilcox.test(conf_pre_ave ~ gender, data=hci) 
+
+# Average post-project confidence score tests
+t.test(hci_m$conf_post_ave, hci_f$conf_post_ave)
+wilcox.test(conf_post_ave ~ gender, data=hci) 
+
+# Study hours
+t.test(hci_m$hours_num, hci_f$hours_num)
+wilcox.test(hours_num ~ gender, data=hci)
+
+# Total grade
+t.test(hci_m$total, hci_f$total)
+wilcox.test(total ~ gender, data=hci)
+```
+
+
+```{r Fit regression models}
+
+# Check for multicollinearity
+cor_subset = hci[, c("age_num", "native_ind", "higher_ind", "gender_ind")]
+cor(na.omit(cor_subset))
+
+# Fit regression to confidence score
+conf_lm = lm(conf_ave~gender + age_num + native_ind + higher_ind,
+             data=na.omit(hci))
+
+summary(conf_lm)
+
+# Fit regression to pre-project confidence score
+conf_pre_lm = lm(conf_pre_ave~gender + age_num + native_ind + higher_ind,
+             data=na.omit(hci))
+
+summary(conf_pre_lm)
+
+# Fit regression to post-project confidence score
+conf_post_lm = lm(conf_post_ave~gender + age_num + native_ind + higher_ind,
+             data=na.omit(hci))
+
+summary(conf_post_lm)
+
+# Fit regression to study hours
+hours_lm = lm(hours_num~gender + age_num + native_ind + higher_ind,
+             data=na.omit(hci))
+
+summary(hours_lm)
+
+# Fit regression to grades
+grades_lm = lm(total~gender + age_num + native_ind + higher_ind,
+             data=na.omit(hci))
+
+summary(grades_lm)
+
+```

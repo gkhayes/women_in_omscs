@@ -1,0 +1,991 @@
+---
+title: "Educational Technology Project - Survey Data Analysis"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+###Process Data###
+```{r setup, echo=TRUE, results='hide', warning=FALSE}
+
+# Set cwd
+setwd("D:/Documents/Data Science/Educational Technology/R/Survey")
+#setwd("E:/Educational Technology/R/Survey")
+getwd()
+
+# Load libraries
+library(plyr)
+library(tools)
+library(psych)
+library(ggplot2)
+
+# Read in survey data set
+survey = read.csv('20170414_Survey_Responses.csv')
+```
+
+```{r process data, echo=TRUE, results = 'hide'}
+
+# Replace blanks with NA
+is.na(survey) = (survey=="")
+
+# Convert factors into character strings
+survey$residence = as.character(survey$residence)
+survey$birth = as.character(survey$birth)
+survey$language = as.character(survey$language)
+survey$education_field = as.character(survey$education_field)
+survey$omscs_reason = as.character(survey$omscs_reason)
+survey$specialization = as.character(survey$specialization)
+survey$prog_languages = as.character(survey$prog_languages)
+
+# Simplify level names
+survey$education_level = revalue(survey$education_level, 
+                        c("Bachelor's degree (or equivalent)"="Bachelors", 
+                        "PhD degree (or equivalent)"="Doctorate", 
+                        "Master's degree (or equivalent)" = "Masters"))
+
+course_names = colnames(survey)[12:39]
+
+for(i in seq(1, length(course_names))){
+    name = course_names[i]
+    survey[, name] = as.character(survey[, name])
+    survey[, name] = ifelse(survey[, name] == "Attempted but did not complete", 
+                            "Attempted", survey[, name])
+    survey[, name] = ifelse(survey[, name] == "Currently undertaking (Spring 2017)", 
+                            "Current", survey[, name])
+    survey[, name] = ifelse(is.na(survey[, name]), "Not Attempted", survey[, name])
+    survey[,name] = factor(survey[,name], levels = c("Completed", "Current", "Attempted",
+                                                     "Not Attempted"))
+}
+
+# Determine counts of courses completed, attempted and current for each respondent
+# Initialize counter variables
+survey$completed = 0
+survey$attempted = 0
+survey$current = 0
+
+for(j in seq(1, dim(survey)[1])){
+  for(i in seq(1, length(course_names))){
+    name = course_names[i]
+    if(survey[j, name]=="Completed"){
+      survey$completed[j] = survey$completed[j] + 1
+    } else if(survey[j, name]=="Attempted"){
+      survey$attempted[j] = survey$attempted[j] + 1
+    } else if(survey[j, name]=="Current"){
+      survey$current[j] = survey$current[j] + 1
+    }
+  }
+}
+
+# Convert scales to numeric
+survey$conf_post = revalue(survey$conf_post, c("Very confident" = 5, "Confident" = 4, 
+                      "Neutral" = 3, "Unconfident" = 2, "Very unconfident" = 1))
+
+survey$conf_post = as.numeric(as.character(survey$conf_post))
+
+survey$conf_prior = revalue(survey$conf_prior, c("Very confident" = 5, "Confident" = 4, 
+                      "Neutral" = 3, "Unconfident" = 2, "Very unconfident" = 1))
+
+survey$conf_prior = as.numeric(as.character(survey$conf_prior))
+
+statements_pos = colnames(survey)[c(49, 50, 51, 52, 53, 54, 56, 57, 58, 62, 64, 66, 
+                                    68, 69)]
+statements_neg = colnames(survey)[c(55, 59, 60, 61, 63, 65, 67, 70)]
+
+for(i in seq(1, length(statements_pos))){
+    name = statements_pos[i]
+    survey[, name] = revalue(survey[, name], c("Strongly Agree" = 5, "Agree" = 4, 
+                      "Neutral" = 3, "Disagree" = 2, "Strongly disagree" = 1))
+    survey[, name] = as.numeric(as.character(survey[, name]))
+}
+
+for(i in seq(1, length(statements_neg))){
+    name = statements_neg[i]
+    survey[, name] = revalue(survey[, name], c("Strongly Agree" = 1, "Agree" = 2, 
+                      "Neutral" = 3, "Disagree" = 4, "Strongly disagree" = 5))
+    survey[, name] = as.numeric(as.character(survey[, name]))
+}
+
+# Create average confidence score
+survey$conf_ave = (survey$conf_prior + survey$conf_post)/2
+
+# Get lists of unique values
+#unique(survey$residence)
+#unique(survey$birth)
+#unique(survey$language)
+#unique(survey$education_field)
+
+# Clean language
+survey$language = ifelse(survey$language == "korean", "Korean", survey$language)
+survey$language = ifelse(survey$language == "Bahasa Indonesia", "Indonesian",
+                         survey$language)
+survey$language = ifelse(survey$language %in% c("Telugu (Indian dialect)", "Marathi", 
+                  "Bengali", "Kannada", "Kannada ", "Hindi", "Tamil"), "Indian",
+                  survey$language)
+survey$language = ifelse(survey$language == "Tagalog (Filipino)", "Tagalog",
+                         survey$language)
+
+# Clean education field
+survey$education_field = ifelse(survey$education_field == "Engineering and Theology (2)",
+                                "Engineering", survey$education_field)
+survey$education_field = ifelse(survey$education_field == 
+                  "CS,  History, and Classical Studies", "Computer science",
+                  survey$education_field)
+survey$education_field = ifelse(survey$education_field == "Mathematics Education",
+                                "Mathematics/statistics", survey$education_field)
+survey$education_field = ifelse(survey$education_field == "biology",
+                                "Physical/life sciences", survey$education_field)
+survey$education_field = ifelse(survey$education_field == "Business Management",
+                                "Economics/business", survey$education_field)
+survey$education_field = ifelse(survey$education_field %in% c("Theology", 
+              "Social sciences", "Education"), "Humanities/arts", survey$education_field)
+survey$education_field = ifelse(survey$education_field %in% c("Psychology", 
+                "Information Systems Management", "Information Technology"),
+                                "Other sciences", survey$education_field)
+
+# Create factors
+survey$birth = factor(survey$birth)
+survey$residence = factor(survey$residence)
+survey$language = factor(survey$language)
+survey$education_field = factor(survey$education_field)
+
+# Reorder levels of factors where necessary
+survey$omscs_semester = factor(survey$omscs_semester, levels = c("Spring 2014", 
+                          "Summer 2014", "Fall 2014", "Spring 2015", "Summer 2015", 
+                          "Fall 2015", "Spring 2016", "Summer 2016", "Fall 2016", 
+                          "Spring 2017"))
+
+survey$hours = factor(survey$hours, levels = c("< 5", "5 - 9", "10 - 14", "15 - 19", 
+                              "20 - 24", "25 - 29", "30 - 34", "35 - 39", "40 +"))
+
+survey$prog_years = factor(survey$prog_years, levels = c("0", "1", "2", "3 - 5", "6 - 8",
+                                    "9 - 11", "12 - 14", "15+"))
+
+survey$prior_cs_exp = factor(survey$prior_cs_exp, levels = c("0", "1", "2", "3 - 5", 
+                                                             "6 - 8", "9 - 11", "12+"))
+
+# Convert ranges to numeric values
+survey$age_num = revalue(survey$age, c("20 - 24"=22, "25 - 29"=27, "30 - 34"=32, 
+                                       "35 - 39"=37, "40 - 44"=42, "45 - 49"=47,
+                                       "50 - 54"=52, "55 - 59"=57, "60 - 64"=62))
+survey$age_num = as.numeric(as.character(survey$age_num))
+
+survey$gpa_num = revalue(survey$gpa, c("2.5 - 2.9" = 2.7, "3.0 - 3.4" = 3.2,
+                                       "3.5 - 3.9" = 3.7, "Don't Know" = NA))
+survey$gpa_num = as.numeric(as.character(survey$gpa_num))
+
+survey$hours_num = revalue(survey$hours, c("< 5"=2, "5 - 9"=7, "10 - 14"=12, "15 - 19"=17, 
+                              "20 - 24"=22, "25 - 29"=27, "30 - 34"=32, "35 - 39"=37, 
+                              "40 +"=42))
+survey$hours_num = as.numeric(as.character(survey$hours_num))
+
+survey$prog_num = revalue(survey$prog_years, c("3 - 5"= 4, "6 - 8"=7, "9 - 11"=10, 
+                                               "12 - 14"=13, "15+"=16))
+survey$prog_num = as.numeric(as.character(survey$prog_num))
+
+survey$prior_cs_num = revalue(survey$prior_cs_exp, c("3 - 5"=4, "6 - 8"=7, "9 - 11"=10,
+                                                     "12+"=13))
+survey$prior_cs_num = as.numeric(as.character(survey$prior_cs_num))
+
+# Create programming language count variable
+count_items = function(x){
+  if(is.na(x)|x == "I had not previously had any programming experience"){
+    num = 0
+  }else{
+    num = length(unlist(strsplit(x, ", ")))
+  }
+  return (num)
+}
+
+survey$prog_count = sapply(survey$prog_languages, count_items)
+
+# Create specialization indicators
+spec_list = c("Computational Perception and Robotics", "Computing Systems", 
+              "Interactive Intelligence", "Machine Learning")
+
+for(i in seq(1, length(spec_list))){
+    spec = spec_list[i]
+    if(spec=="Computational Perception and Robotics"){
+      name = "spec_robotics"
+    } else if(spec=="Computing Systems"){
+      name = "spec_systems"
+    } else if(spec=="Interactive Intelligence"){
+      name = "spec_intelligence"
+    } else{
+      name = "spec_ml"
+    }
+    survey[, name] = as.numeric(grepl(spec, survey$specialization))
+}
+
+# Create reason indicators
+reason_list = c("To increase financial prospects", "To gain an extra qualification", 
+                "To gain promotion within your current industry of employment",
+    "To switch to a career in a different industry from where you are currently employed",
+                "To make connections", "For fun/challenge")
+
+for(i in seq(1, length(reason_list))){
+    reason = reason_list[i]
+    if(reason=="To increase financial prospects"){
+      name = "reason_financial"
+    } else if(reason=="To gain an extra qualification"){
+      name = "reason_quals"
+    } else if(reason=="To gain promotion within your current industry of employment"){
+      name = "reason_promotion"
+    } else if(reason=="To switch to a career in a different industry from where you are currently employed"){
+      name = "reason_switch"
+    } else if(reason=="To make connections"){
+      name = "reason_connections"
+    } else{
+      name = "reason_fun"
+    }
+    survey[, name] = as.numeric(grepl(reason, survey$omscs_reason))
+}
+
+# Create indicator variables
+survey$cs_study_ind = ifelse(survey$prior_cs_study == "Yes", 1, 0)
+survey$native_ind = ifelse(survey$language == "English", 1, 0)
+survey$us_birth_ind = ifelse(survey$birth == "USA", 1, 0)
+survey$us_res_ind = ifelse(survey$residence == "USA", 1, 0)
+survey$higher_ind = ifelse(survey$education_level %in% c("Masters", "Doctorate"), 1, 0)
+```
+
+
+###Create Score Variables###
+```{r explore consistency of statements}
+
+# Determine correlations between statement agreement scores by group
+# Self-confidence
+sc_corr = cor(survey[, c("selfconf1", "selfconf2", "selfconf3", "selfconf4", "selfconf5",
+               "selfconf6", "selfconf7")])
+sc_corr[sc_corr == 1] <- NA
+
+colMeans(sc_corr, na.rm = TRUE)
+mean(sc_corr, na.rm = TRUE)
+
+# Equality
+eq_corr = cor(survey[, c("equality1", "equality2", "equality3", "equality4", "equality5",
+               "equality6")])
+eq_corr[eq_corr == 1] <- NA
+
+colMeans(eq_corr, na.rm = TRUE)
+mean(eq_corr, na.rm = TRUE)
+
+# Belonging
+be_corr = cor(survey[, c("belonging1", "belonging2", "belonging3", "belonging4",
+                         "belonging5", "belonging6", "belonging7", "belonging8",
+                         "belonging9")])
+be_corr[be_corr == 1] <- NA
+
+colMeans(be_corr, na.rm = TRUE)
+mean(be_corr, na.rm = TRUE)
+
+# Check Cronbach's alpha for each group
+psych::alpha(survey[, c("selfconf1", "selfconf2", "selfconf3", "selfconf4", "selfconf5",
+               "selfconf6", "selfconf7")])
+
+psych::alpha(survey[, c("equality1", "equality2", "equality3", "equality4", "equality5",
+               "equality6")])
+
+psych::alpha(survey[, c("belonging1", "belonging2", "belonging3", "belonging4",
+                         "belonging5", "belonging6", "belonging7", "belonging8",
+                         "belonging9")])
+
+# Create average scores for each measure
+survey$selfconf_score = rowMeans(survey[, c("selfconf1", "selfconf2", "selfconf3",
+                              "selfconf4", "selfconf5", "selfconf6", "selfconf7")])
+
+survey$equality_score = rowMeans(survey[, c("equality1", "equality2", "equality3",
+                          "equality4", "equality5", "equality6")])
+
+survey$belonging_score = rowMeans(survey[, c("belonging1", "belonging2", "belonging3",
+                          "belonging4", "belonging5", "belonging6", "belonging7",
+                          "belonging8", "belonging9")])
+
+```
+
+###Explore Data###
+```{r Calculate summary statistics}
+
+# Calculate summary statistics
+summary(survey)
+
+# Explore outlier cases for completed, current and attempted
+subset(survey[,c("completed", "current", "attempted")], completed > 10)
+subset(survey[,c("completed", "current", "attempted")], current > 3)
+subset(survey[,c("completed", "current", "attempted")], attempted > 5)
+
+# Change outlier values to medians
+survey$current = ifelse(survey$current > 3, 1, survey$current)
+survey$attempted = ifelse(survey$attempted == 14, 0, survey$attempted)
+
+# Calculate proportion of class by gender
+prop.table(table(survey$gender))
+
+# Calculate proportion of respondent who are currently enrolled in CS6460 (EduTech)
+count(subset(survey, cs6460 == "Current"), "cs6460")$freq/dim(survey)[1]
+```
+
+###Analyze Data by Gender###
+```{r Calculate summary statistics by gender}
+
+# Calculate confidence summary statistics
+ddply(survey, "gender", summarise, 
+    mean = mean(conf_prior), sd = sd(conf_prior), median = median(conf_prior),
+    first_q = quantile(conf_prior, 0.25), third_q = quantile(conf_prior, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(conf_post), sd = sd(conf_post), median = median(conf_post),
+    first_q = quantile(conf_post, 0.25), third_q = quantile(conf_post, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(conf_ave), sd = sd(conf_ave), median = median(conf_ave), 
+    first_q = quantile(conf_ave, 0.25), third_q = quantile(conf_ave, 0.75))
+
+# Calculate summary stats for self confidence statements
+ddply(survey, "gender", summarise, 
+    mean = mean(selfconf1), sd = sd(selfconf1), median = median(selfconf1),
+    first_q = quantile(selfconf1, 0.25), third_q = quantile(selfconf1, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(selfconf2), sd = sd(selfconf2), median = median(selfconf2),
+    first_q = quantile(selfconf2, 0.25), third_q = quantile(selfconf2, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(selfconf3), sd = sd(selfconf3), median = median(selfconf3),
+    first_q = quantile(selfconf3, 0.25), third_q = quantile(selfconf3, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(selfconf4), sd = sd(selfconf4), median = median(selfconf4),
+    first_q = quantile(selfconf4, 0.25), third_q = quantile(selfconf4, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(selfconf5), sd = sd(selfconf5), median = median(selfconf5),
+    first_q = quantile(selfconf5, 0.25), third_q = quantile(selfconf5, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(selfconf6), sd = sd(selfconf6), median = median(selfconf6),
+    first_q = quantile(selfconf6, 0.25), third_q = quantile(selfconf6, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(selfconf7), sd = sd(selfconf7), median = median(selfconf7),
+    first_q = quantile(selfconf7, 0.25), third_q = quantile(selfconf7, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(selfconf_score), sd = sd(selfconf_score), median = median(selfconf_score),
+    first_q = quantile(selfconf_score, 0.25), third_q = quantile(selfconf_score, 0.75))
+
+# Calculate summary statistics for equality statements
+ddply(survey, "gender", summarise, 
+    mean = mean(equality1), sd = sd(equality1), median = median(equality1),
+    first_q = quantile(equality1, 0.25), third_q = quantile(equality1, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(equality2), sd = sd(equality2), median = median(equality2),
+    first_q = quantile(equality2, 0.25), third_q = quantile(equality2, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(equality3), sd = sd(equality3), median = median(equality3),
+    first_q = quantile(equality3, 0.25), third_q = quantile(equality3, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(equality4), sd = sd(equality4), median = median(equality4),
+    first_q = quantile(equality4, 0.25), third_q = quantile(equality4, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(equality5), sd = sd(equality5), median = median(equality5),
+    first_q = quantile(equality5, 0.25), third_q = quantile(equality5, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(equality6), sd = sd(equality6), median = median(equality6),
+    first_q = quantile(equality6, 0.25), third_q = quantile(equality6, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(equality_score), sd = sd(equality_score), median = median(equality_score),
+    first_q = quantile(equality_score, 0.25), third_q = quantile(equality_score, 0.75))
+
+# Calculate summary statistics for belonging statements
+ddply(survey, "gender", summarise, 
+    mean = mean(belonging1), sd = sd(belonging1), median = median(belonging1),
+    first_q = quantile(belonging1, 0.25), third_q = quantile(belonging1, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(belonging2), sd = sd(belonging2), median = median(belonging2),
+    first_q = quantile(belonging2, 0.25), third_q = quantile(belonging2, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(belonging3), sd = sd(belonging3), median = median(belonging3),
+    first_q = quantile(belonging3, 0.25), third_q = quantile(belonging3, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(belonging4), sd = sd(belonging4), median = median(belonging4),
+    first_q = quantile(belonging4, 0.25), third_q = quantile(belonging4, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(belonging5), sd = sd(belonging5), median = median(belonging5),
+    first_q = quantile(belonging5, 0.25), third_q = quantile(belonging5, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(belonging6), sd = sd(belonging6), median = median(belonging6),
+    first_q = quantile(belonging6, 0.25), third_q = quantile(belonging6, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(belonging7), sd = sd(belonging7), median = median(belonging7),
+    first_q = quantile(belonging7, 0.25), third_q = quantile(belonging7, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(belonging8), sd = sd(belonging8), median = median(belonging8),
+    first_q = quantile(belonging8, 0.25), third_q = quantile(belonging8, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(belonging9), sd = sd(belonging9), median = median(belonging9),
+    first_q = quantile(belonging9, 0.25), third_q = quantile(belonging9, 0.75))
+
+ddply(survey, "gender", summarise, 
+    mean = mean(belonging_score), sd = sd(belonging_score),
+    median = median(belonging_score),
+    first_q = quantile(belonging_score, 0.25), third_q = quantile(belonging_score, 0.75))
+
+# Calculate age summary statistics
+ddply(survey, "gender", summarise, mean = mean(age_num), 
+      sd = sd(age_num), median = median(age_num), first_q = quantile(age_num, 0.25),
+      third_q = quantile(age_num, 0.75))
+
+# Calculate gpa summary statistics
+ddply(subset(survey, !is.na(gpa_num)), "gender", summarise, mean = mean(gpa_num), 
+        sd = sd(gpa_num), median = median(gpa_num), first_q = 
+        quantile(gpa_num, 0.25), third_q = quantile(gpa_num, 0.75))
+
+# Calculate study hours summary statistics
+ddply(survey, "gender", summarise, 
+             mean = mean(hours_num), sd = sd(hours_num), median = median(hours_num), 
+             first_q = quantile(hours_num, 0.25), third_q = quantile(hours_num, 0.75))
+
+# Calculate programming years summary statistics
+ddply(survey, "gender", summarise, 
+             mean = mean(prog_num), sd = sd(prog_num), median = median(prog_num), 
+             first_q = quantile(prog_num, 0.25), third_q = quantile(prog_num, 0.75))
+
+# Calculate prior cs experience summary statistics
+ddply(survey, "gender", summarise, mean = mean(prior_cs_num), sd = sd(prior_cs_num), 
+      median = median(prior_cs_num), first_q = quantile(prior_cs_num, 0.25), 
+      third_q = quantile(prior_cs_num, 0.75))
+
+# Calculate programming language count summary statistics
+ddply(survey, "gender", summarise, mean = mean(prog_count), sd = sd(prog_count), 
+      median = median(prog_count), first_q = quantile(prog_count, 0.25), 
+      third_q = quantile(prog_count, 0.75))
+
+# Calculate course completion/attempt summary statistics
+ddply(survey, "gender", summarise, mean = mean(completed), sd = sd(completed), 
+      median = median(completed), first_q = quantile(completed, 0.25), 
+      third_q = quantile(completed, 0.75))
+
+ddply(survey, "gender", summarise, mean = mean(attempted), sd = sd(attempted), 
+      median = median(attempted), first_q = quantile(attempted, 0.25), 
+      third_q = quantile(attempted, 0.75))
+
+ddply(survey, "gender", summarise, mean = mean(current), sd = sd(current), 
+      median = median(current), first_q = quantile(current, 0.25), 
+      third_q = quantile(current, 0.75))
+
+```
+
+```{r Compare proportion of the class in each category by gender}
+
+survey_m = subset(survey, gender == "Male")
+survey_f = subset(survey, gender == "Female")
+
+# Compare age
+prop.table(table(survey_m$age))
+prop.table(table(survey_f$age))
+
+# Compare birth country
+prop.table(table(survey_m$birth))
+prop.table(table(survey_f$birth))
+
+# Compare country of residence
+prop.table(table(survey_m$residence))
+prop.table(table(survey_f$residence))
+
+# Compare language background
+prop.table(table(survey_m$language))
+prop.table(table(survey_f$language))
+
+# Compare English skills
+prop.table(table(survey_m$english))
+prop.table(table(survey_f$english))
+
+# Compare education level
+prop.table(table(survey_m$education_level))
+prop.table(table(survey_f$education_level))
+
+# Compare education field
+prop.table(table(survey_m$education_field))
+prop.table(table(survey_f$education_field))
+
+# Compare omscs_yn
+prop.table(table(survey_m$omscs_yn))
+prop.table(table(survey_f$omscs_yn))
+
+# Compare OMSCS commencement semester
+prop.table(table(survey_m$omscs_semester))
+prop.table(table(survey_f$omscs_semester))
+
+# Compare prior cs study ind
+prop.table(table(survey_m$prior_cs_study))
+prop.table(table(survey_f$prior_cs_study))
+
+# Compare prior cs experience 
+prop.table(table(survey_m$prior_cs_exp))
+prop.table(table(survey_f$prior_cs_exp))
+
+# Compare specializations (including current EduTech students)
+prop.table(table(survey_m$spec_robotics))
+prop.table(table(survey_f$spec_robotics))
+
+prop.table(table(survey_m$spec_systems))
+prop.table(table(survey_f$spec_systems))
+
+prop.table(table(survey_m$spec_intelligence))
+prop.table(table(survey_f$spec_intelligence))
+
+prop.table(table(survey_m$spec_ml))
+prop.table(table(survey_f$spec_ml))
+
+# Compare specializations (excluding current EduTech students)
+prop.table(table(subset(survey_m, cs6460 != "Current")$spec_robotics))
+prop.table(table(subset(survey_f, cs6460 != "Current")$spec_robotics))
+
+prop.table(table(subset(survey_m, cs6460 != "Current")$spec_systems))
+prop.table(table(subset(survey_f, cs6460 != "Current")$spec_systems))
+
+prop.table(table(subset(survey_m, cs6460 != "Current")$spec_intelligence))
+prop.table(table(subset(survey_f, cs6460 != "Current")$spec_intelligence))
+
+prop.table(table(subset(survey_m, cs6460 != "Current")$spec_ml))
+prop.table(table(subset(survey_f, cs6460 != "Current")$spec_ml))
+
+# Compare reasons
+prop.table(table(survey_m$reason_financial))
+prop.table(table(survey_f$reason_financial))
+
+prop.table(table(survey_m$reason_quals))
+prop.table(table(survey_f$reason_quals))
+
+prop.table(table(survey_m$reason_promotion))
+prop.table(table(survey_f$reason_promotion))
+
+prop.table(table(survey_m$reason_switch))
+prop.table(table(survey_f$reason_switch))
+
+prop.table(table(survey_m$reason_connections))
+prop.table(table(survey_f$reason_connections))
+
+prop.table(table(survey_m$reason_fun))
+prop.table(table(survey_f$reason_fun))
+
+```
+
+```{r Create graphs comparing distributions by gender}
+
+#Boxplot of age distribution by gender
+ggplot(survey, aes(gender, age_num)) + 
+ geom_boxplot() + 
+ labs(title = "Age Distribution by Gender",
+      x = "Gender", y = "Age") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of gpa distribution by gender
+ggplot(subset(survey, !is.na(gpa_num)), aes(gender, gpa_num)) + 
+ geom_boxplot() + 
+ labs(title = "Overall GPA Distribution by Gender",
+      x = "Gender", y = "GPA") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of hours spent studying by gender
+ggplot(survey, aes(gender, hours_num)) +  geom_boxplot() + 
+ labs(title = "Study Hours Distribution by Gender",
+      x = "Gender", y = "Study Hours") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of programming experience by gender
+ggplot(survey, aes(gender, prog_num)) + 
+ geom_boxplot() + 
+ labs(title = "Programming Experience Distribution by Gender",
+      x = "Gender", y = "Programming Experience (Years)") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of prior cs experience by gender
+ggplot(survey, aes(gender, prior_cs_num)) + 
+ geom_boxplot() + 
+ labs(title = "Prior CS Experience Distribution by Gender",
+      x = "Gender", y = "Prior CS Experience (Years)") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of programming language count by gender
+ggplot(survey, aes(gender, prog_count)) + 
+ geom_boxplot() + 
+ labs(title = "Programming Language Count Distribution by Gender",
+      x = "Gender", y = "Programming Language Count") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of confidence score by gender
+ggplot(survey, aes(gender, conf_ave)) +  geom_boxplot() + 
+ labs(title = "Confidence Score Distribution by Gender",
+      x = "Gender", y = "Average Confidence Score") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of confidence score (pre-OMSCS) by gender
+ggplot(survey, aes(gender, conf_prior)) +  geom_boxplot() + 
+ labs(title = "Confidence Score (Pre-OMSCS) Distribution by Gender",
+      x = "Gender", y = "Pre-OMSCS Confidence Score") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of confidence score (post-OMSCS) by gender
+ggplot(survey, aes(gender, conf_post)) +  geom_boxplot() + 
+ labs(title = "Confidence Score (Post-OMSCS) Distribution by Gender",
+      x = "Gender", y = "Post-OMSCS Confidence Score") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of self-confidence score by gender
+ggplot(survey, aes(gender, selfconf_score)) +  geom_boxplot() + 
+ labs(title = "Self-Confidence Score Distribution by Gender",
+      x = "Gender", y = "Self-Confidence Score") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of equality score by gender
+ggplot(survey, aes(gender, equality_score)) +  geom_boxplot() + 
+ labs(title = "Equality Score Distribution by Gender",
+      x = "Gender", y = "Equality Score") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of belonging score by gender
+ggplot(survey, aes(gender, belonging_score)) +  geom_boxplot() + 
+ labs(title = "Belonging Score Distribution by Gender",
+      x = "Gender", y = "Belonging Score") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Bar chart comparing age by gender
+ggplot(survey, aes(x = age)) + 
+    geom_bar(fill = "blue") + 
+    facet_wrap(~gender, scales = "free_y") +
+    labs(title = "Age Distribution by Gender",
+      x = "Age Band", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Bar chart comparing education level by gender
+ggplot(survey, aes(x = education_level)) + 
+    geom_bar(fill = "blue") + 
+    facet_wrap(~gender, scales = "free_y") +
+    labs(title = "Highest Education Level by Gender",
+      x = "Highest Level of Educational Attainment", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Bar chart comparing prior cs experience by gender
+ggplot(survey, aes(x = prior_cs_exp)) + 
+    geom_bar(fill = "blue") + 
+    facet_wrap(~gender, scales = "free_y") +
+    labs(title = "Prior CS Experience Distribution by Gender",
+      x = "Prior CS Experience (Years)", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of conf_ave by gender
+ggplot(survey, aes(x = conf_ave)) + 
+    geom_histogram(fill = "blue", binwidth = 0.5) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Confidence Score Distribution by Gender",
+      x = "Average Confidence Score", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of conf_prior by gender
+ggplot(survey, aes(x = conf_prior)) + 
+    geom_histogram(fill = "blue", binwidth = 0.5) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Pre-OMSCS Confidence Score Distribution by Gender",
+      x = "Pre-OMSCS Confidence Score", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of conf_post by gender
+ggplot(survey, aes(x = conf_post)) + 
+    geom_histogram(fill = "blue", binwidth = 0.5) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Post-OMSCS Confidence Score Distribution by Gender",
+      x = "Post-OMSCS Confidence Score", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of study hours by gender
+ggplot(survey, aes(x = hours_num)) + 
+    geom_histogram(fill = "blue", binwidth = 1) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Study Hours Distribution by Gender",
+      x = "Average Hours Spent Studying per Week", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+          
+# Histogram of programming experience by gender
+ggplot(survey, aes(x = prog_num)) + 
+    geom_histogram(fill = "blue", binwidth = 1) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Programming Experience Distribution by Gender",
+      x = "Average Programming Experience (Years)", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of prior cs experience by gender
+ggplot(survey, aes(x = prior_cs_num)) + 
+    geom_histogram(fill = "blue", binwidth = 1) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Prior CS Experience Distribution by Gender",
+      x = "Prior CS Experience (Years)", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of self-confidence score by gender
+ggplot(survey, aes(x = selfconf_score)) + 
+    geom_histogram(fill = "blue", binwidth = 0.5) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Self-Confidence Score Distribution by Gender",
+      x = "Self-Confidence Score", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of equality score by gender
+ggplot(survey, aes(x = equality_score)) + 
+    geom_histogram(fill = "blue", binwidth = 0.5) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Equality Score Distribution by Gender",
+      x = "Equality Score", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of belonging score by gender
+ggplot(survey, aes(x = belonging_score)) + 
+    geom_histogram(fill = "blue", binwidth = 0.5) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Belonging Score Distribution by Gender",
+      x = "Belonging Score", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+```
+
+```{r Hypothesis tests to compare variables by gender}
+
+# Age tests
+t.test(survey_m$age_num, survey_f$age_num)
+wilcox.test(age_num ~ gender, data=survey) 
+
+# GPA tests
+t.test(survey_m$gpa_num, survey_f$gpa_num)
+wilcox.test(gpa_num ~ gender, data=survey) 
+
+# Average confidence score tests
+t.test(survey_m$conf_ave, survey_f$conf_ave)
+wilcox.test(conf_ave ~ gender, data=survey) 
+
+# Pre-OMSCS confidence score tests
+t.test(survey_m$conf_prior, survey_f$conf_prior)
+wilcox.test(conf_prior ~ gender, data=survey) 
+
+# Post-OMSCS confidence score tests
+t.test(survey_m$conf_post, survey_f$conf_post)
+wilcox.test(conf_post ~ gender, data=survey) 
+
+# Study hours
+t.test(survey_m$hours_num, survey_f$hours_num)
+wilcox.test(hours_num ~ gender, data=survey)
+
+# Programming experience tests
+t.test(survey_m$prog_num, survey_f$prog_num)
+wilcox.test(prog_num ~ gender, data=survey) 
+
+# Prior CS experience tests
+t.test(survey_m$prior_cs_num, survey_f$prior_cs_num)
+wilcox.test(prior_cs_num ~ gender, data=survey) 
+
+# Programming language count tests
+t.test(survey_m$prog_count, survey_f$prog_count)
+wilcox.test(prog_count ~ gender, data=survey) 
+
+# Self-confidence score tests
+t.test(survey_m$selfconf_score, survey_f$selfconf_score)
+wilcox.test(selfconf_score ~ gender, data=survey) 
+
+t.test(survey_m$selfconf1, survey_f$selfconf1)
+wilcox.test(selfconf1 ~ gender, data=survey) 
+
+t.test(survey_m$selfconf2, survey_f$selfconf2)
+wilcox.test(selfconf2 ~ gender, data=survey) 
+
+t.test(survey_m$selfconf3, survey_f$selfconf3)
+wilcox.test(selfconf3 ~ gender, data=survey) 
+
+t.test(survey_m$selfconf4, survey_f$selfconf4)
+wilcox.test(selfconf4 ~ gender, data=survey) 
+
+t.test(survey_m$selfconf5, survey_f$selfconf5)
+wilcox.test(selfconf5 ~ gender, data=survey) 
+
+t.test(survey_m$selfconf6, survey_f$selfconf6)
+wilcox.test(selfconf6 ~ gender, data=survey) 
+
+t.test(survey_m$selfconf7, survey_f$selfconf7)
+wilcox.test(selfconf7 ~ gender, data=survey) 
+
+
+# Equality score tests
+t.test(survey_m$equality_score, survey_f$equality_score)
+wilcox.test(equality_score ~ gender, data=survey) 
+
+t.test(survey_m$equality1, survey_f$equality1)
+wilcox.test(equality1 ~ gender, data=survey) 
+
+t.test(survey_m$equality2, survey_f$equality2)
+wilcox.test(equality2 ~ gender, data=survey) 
+
+t.test(survey_m$equality3, survey_f$equality3)
+wilcox.test(equality3 ~ gender, data=survey) 
+
+t.test(survey_m$equality4, survey_f$equality4)
+wilcox.test(equality4 ~ gender, data=survey) 
+
+t.test(survey_m$equality5, survey_f$equality5)
+wilcox.test(equality5 ~ gender, data=survey) 
+
+t.test(survey_m$equality6, survey_f$equality6)
+wilcox.test(equality6 ~ gender, data=survey) 
+
+
+# Belonging score tests
+t.test(survey_m$belonging_score, survey_f$belonging_score)
+wilcox.test(belonging_score ~ gender, data=survey) 
+
+t.test(survey_m$belonging1, survey_f$belonging1)
+wilcox.test(belonging1 ~ gender, data=survey) 
+
+t.test(survey_m$belonging2, survey_f$belonging2)
+wilcox.test(belonging2 ~ gender, data=survey) 
+
+t.test(survey_m$belonging3, survey_f$belonging3)
+wilcox.test(belonging3 ~ gender, data=survey) 
+
+t.test(survey_m$belonging4, survey_f$belonging4)
+wilcox.test(belonging4 ~ gender, data=survey) 
+
+t.test(survey_m$belonging5, survey_f$belonging5)
+wilcox.test(belonging5 ~ gender, data=survey) 
+
+t.test(survey_m$belonging6, survey_f$belonging6)
+wilcox.test(belonging6 ~ gender, data=survey) 
+
+t.test(survey_m$belonging7, survey_f$belonging7)
+wilcox.test(belonging7 ~ gender, data=survey) 
+
+t.test(survey_m$belonging8, survey_f$belonging8)
+wilcox.test(belonging8 ~ gender, data=survey) 
+
+t.test(survey_m$belonging9, survey_f$belonging9)
+wilcox.test(belonging9 ~ gender, data=survey) 
+
+
+# Prior CS ind test
+t.test(survey_m$cs_study_ind, survey_f$cs_study_ind)
+wilcox.test(cs_study_ind ~ gender, data=survey) 
+
+# English ind test
+t.test(survey_m$native_ind, survey_f$native_ind)
+wilcox.test(native_ind ~ gender, data=survey) 
+
+# US birth ind test
+t.test(survey_m$us_birth_ind, survey_f$us_birth_ind)
+wilcox.test(us_birth_ind ~ gender, data=survey) 
+
+# US residence ind test
+t.test(survey_m$us_res_ind, survey_f$us_res_ind)
+wilcox.test(us_res_ind ~ gender, data=survey) 
+
+# Higher education ind test
+t.test(survey_m$higher_ind, survey_f$higher_ind)
+wilcox.test(higher_ind ~ gender, data=survey) 
+```
+
+###Regression Analysis###
+```{r Fit regression models}
+
+# Check for multicollinearity
+cor_subset = survey[, c("age_num", "prior_cs_num", "native_ind", "higher_ind",
+                        "cs_study_ind", "completed")]
+cor(na.omit(cor_subset))
+
+# Fit regression to conf_ave
+conf_lm = lm(conf_ave~gender + age_num + cs_study_ind + native_ind +  higher_ind + 
+               completed, data=survey)
+
+summary(conf_lm)
+
+# Fit regression to conf_prior
+conf_prior_lm = lm(conf_prior~gender + age_num + cs_study_ind + native_ind +  higher_ind + 
+               completed, data=survey)
+
+summary(conf_prior_lm)
+
+# Fit regression to conf_post
+conf_post_lm = lm(conf_post~gender + age_num + cs_study_ind + native_ind +  higher_ind + 
+               completed, data=survey)
+
+summary(conf_post_lm)
+
+# Fit regression to selfconf_score
+selfconf_lm = lm(selfconf_score~gender + age_num + cs_study_ind + native_ind +  
+                   higher_ind + completed, data=survey)
+
+summary(selfconf_lm)
+
+# Fit regression to equality_score
+equality_lm = lm(equality_score~gender + age_num + cs_study_ind + native_ind + 
+                   higher_ind + completed, data=survey)
+
+summary(equality_lm)
+
+# Fit regression to belonging_score
+belonging_lm = lm(belonging_score~gender + age_num + cs_study_ind + native_ind + 
+                    higher_ind + completed, data=survey)
+
+summary(belonging_lm)
+
+# Fit regression to study hours
+hours_lm = lm(hours_num~gender + age_num + cs_study_ind + native_ind +  higher_ind + 
+               completed, data=survey)
+
+summary(hours_lm)
+
+# Fit regression to number of years' programming experience
+prog_lm = lm(prog_num~gender + age_num + cs_study_ind + native_ind +  higher_ind + 
+               completed, data=survey)
+
+summary(prog_lm)
+
+# Fit regression to number of years' cs experience
+prior_cs_lm = lm(prior_cs_num~gender + age_num + cs_study_ind + native_ind +  higher_ind + 
+               completed, data=survey)
+
+summary(prior_cs_lm)
+
+# Fit regression to gpa
+gpa_lm = lm(gpa_num~gender + age_num + cs_study_ind + native_ind +  higher_ind + 
+               completed, data=survey)
+
+summary(gpa_lm)
+
+# Fit logistic regression to prior cs study indicator
+cs_study_lm = glm(cs_study_ind~gender + age_num + cs_study_ind + native_ind + 
+                higher_ind + completed, data=survey, family=binomial())
+
+summary(cs_study_lm)
+
+```

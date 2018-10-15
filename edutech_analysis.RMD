@@ -1,0 +1,626 @@
+---
+title: Educational Technology Project - EduTech (Fall 2015, Spring 2016 and Fall 2016)
+  Data Analysis
+output:
+  pdf_document: default
+  html_document: default
+---
+
+###Process Data###
+```{r setup, echo=TRUE, results='hide', warning=FALSE}
+# Set cwd
+setwd("D:/Documents/Data Science/Educational Technology/R/EduTech")
+#setwd("E:/Educational Technology/R/EduTech")
+getwd()
+
+# Load libraries
+library(plyr)
+library(tools)
+library(ggplot2)
+
+# Read in survey data sets
+survey_fall15_soc = read.csv('Survey_CS6460_FALL15_SOC.csv')
+survey_fall15_qc = read.csv('Survey_CS6460_FALL15_QC.csv')
+survey_fall15_mc = read.csv('Survey_CS6460_FALL15_MC.csv')
+survey_fall15_eoc = read.csv('Survey_CS6460_FALL15_EOC.csv')
+
+survey_spr16_soc = read.csv('Survey_CS6460_SPR16_SOC.csv')
+survey_spr16_qc = read.csv('Survey_CS6460_SPR16_QC.csv')
+survey_spr16_mc = read.csv('Survey_CS6460_SPR16_MC.csv')
+survey_spr16_eoc = read.csv('Survey_CS6460_SPR16_EOC.csv')
+
+survey_fall16_soc = read.csv('Survey_CS6460_FALL16_SOC.csv')
+survey_fall16_qc = read.csv('Survey_CS6460_FALL16_QC.csv')
+survey_fall16_mc = read.csv('Survey_CS6460_FALL16_MC.csv')
+survey_fall16_eoc = read.csv('Survey_CS6460_FALL16_EOC.csv')
+
+# Read in grade data sets
+grades_fall16 = read.csv('Grades_CS6460_FALL16.csv', na.strings="")
+grades_spr16 = read.csv('Grades_CS6460_SPR16.csv', na.strings="")
+```
+
+```{r process data, echo=TRUE, results = 'hide'}
+
+# Create data subsets containing information of interest and change names
+survey_fall15_soc = survey_fall15_soc[, c(1, 2, 3, 4, 5, 7, 8, 10)]
+colnames(survey_fall15_soc) = c("student", "age", "gender", "birth", "residence", 
+                                "language", "english", "education")
+
+survey_spr16_soc = survey_spr16_soc[, c(1, 2, 3, 4, 5, 7, 8, 10)]
+colnames(survey_spr16_soc) = c("student", "age", "gender", "birth", "residence", 
+                               "language", "english", "education")
+
+survey_fall16_soc = survey_fall16_soc[, c(1, 2, 3, 4, 5, 7, 8, 10)]
+colnames(survey_fall16_soc) = c("student", "age", "gender", "birth", "residence", 
+                                "language", "english", "education")
+
+survey_fall15_qc = survey_fall15_qc[, c(1, 2, 3)]
+colnames(survey_fall15_qc) = c("student", "conf_p1_post", "conf_p2_pre")
+
+survey_spr16_qc = survey_spr16_qc[, c(1, 2, 3)]
+colnames(survey_spr16_qc) = c("student", "conf_p1_post", "conf_p2_pre")
+
+survey_fall16_qc = survey_fall16_qc[, c(1, 13, 14)]
+colnames(survey_fall16_qc) = c("student", "conf_p1_post", "conf_p2_pre")
+
+
+survey_fall15_mc = survey_fall15_mc[, c(1, 2, 3)]
+colnames(survey_fall15_mc) = c("student", "conf_p2_post", "conf_p3_pre")
+
+survey_spr16_mc = survey_spr16_mc[, c(1, 2, 3)]
+colnames(survey_spr16_mc) = c("student", "conf_p2_post", "conf_p3_pre")
+
+survey_fall16_mc = survey_fall16_mc[, c(1, 2, 3)]
+colnames(survey_fall16_mc) = c("student", "conf_p2_post", "conf_p3_pre")
+
+
+survey_fall15_eoc = survey_fall15_eoc[, c(1, 2, 11)]
+colnames(survey_fall15_eoc) = c("student", "hours", "conf_p3_post")
+
+survey_spr16_eoc = survey_spr16_eoc[, c(1, 2, 10)]
+colnames(survey_spr16_eoc) = c("student", "hours", "conf_p3_post")
+
+survey_fall16_eoc = survey_fall16_eoc[, c(1, 6, 14)]
+colnames(survey_fall16_eoc) = c("student", "hours", "conf_p3_post")
+
+colnames(grades_spr16) = c("student", "part_total", "part_other",
+      "part_feedback", "part_piazza", "paper", "pres", "project", 
+      "milestone1", "milestone2", "milestone3", "milestone4", "personal", 
+      "prop", "status", "assign1", "assign2", "assign3", "assign4", "part_raw") 
+
+colnames(grades_fall16) = c("student", "part_total", "part_other",
+      "part_feedback", "part_piazza", "paper", "pres", "project", 
+      "milestone1", "milestone2", "personal", "prop", "status", "assign1",
+      "assign2", "assign3", "assign4", "part_raw")
+
+
+# Create function to convert grade scales
+grade_covert = function(x){
+  if(is.na(x)){
+    num = 0
+  } else if (x>0){
+    num = (x/5)*50 - 5 + 50
+  } else{
+    num = 0
+  }
+  return(num)
+}
+
+# Convert letter grades to numbers
+cols_spr16 = c("paper", "pres", "project", 
+      "milestone1", "milestone2", "milestone3", "milestone4", "personal", 
+      "prop", "assign1", "assign2", "assign3", "assign4")
+
+for(i in seq(1, length(cols_spr16))){
+    name = cols_spr16[i]
+    grades_spr16[, name] = sapply(grades_spr16[, name], grade_covert)
+}
+
+cols_fall16 = c("paper", "pres", "project", "milestone1", "milestone2",
+      "personal", "prop", "assign1", "assign2", "assign3", "assign4")
+
+for(i in seq(1, length(cols_fall16))){
+    name = cols_fall16[i]
+    grades_fall16[, name] = sapply(grades_fall16[, name], grade_covert)
+}
+
+# Create grade summary variables
+grades_spr16$assign_ave = 100*(grades_spr16$assign1 + grades_spr16$assign2 +
+                              grades_spr16$assign3 + grades_spr16$assign4)/400
+
+grades_spr16$milestone_ave = 100*(grades_spr16$milestone1 +
+                      grades_spr16$milestone2 + grades_spr16$milestone3 +
+                      grades_spr16$milestone4)/400
+
+grades_spr16$project_ave = 100*(grades_spr16$paper + grades_spr16$pres +
+                              grades_spr16$project)/300
+
+grades_spr16$total = (grades_spr16$assign_ave*0.15 + grades_spr16$personal*0.05 +
+                grades_spr16$prop*0.1 + 100*(grades_spr16$status/5)*0.05 + 
+                grades_spr16$milestone_ave*0.2 + grades_spr16$project_ave*0.3 +
+                100*(grades_spr16$part_raw/75)*0.15)
+
+grades_fall16$assign_ave = 100*(grades_fall16$assign1 + grades_fall16$assign2 +
+                              grades_fall16$assign3 + grades_fall16$assign4)/400
+
+grades_fall16$milestone_ave = 100*(grades_fall16$milestone1 +
+                      grades_fall16$milestone2)/200
+
+grades_fall16$project_ave = 100*(grades_fall16$paper + grades_fall16$pres +
+                              grades_fall16$project)/300
+
+grades_fall16$total = (grades_fall16$assign_ave*0.15 +
+          grades_fall16$personal*0.1 + grades_fall16$prop*0.1 +
+          100*(grades_fall16$status/5)*0.05 + grades_fall16$milestone_ave*0.15 +
+          grades_fall16$project_ave*0.3 + 100*(grades_fall16$part_raw/75)*0.15)
+
+
+# Drop unnecessary fields from grades dataframes
+grades_spr16 = grades_spr16[,c("student", "assign_ave", "milestone_ave",
+                               "project_ave", "total")]
+
+grades_fall16 = grades_fall16[,c("student", "assign_ave", "milestone_ave",
+                               "project_ave", "total")]
+# Merge datasets
+edutech_data_fall15 = merge(x = survey_fall15_soc, y = survey_fall15_qc, 
+                            by = "student", all.x = TRUE)
+edutech_data_fall15 = merge(x = edutech_data_fall15, y = survey_fall15_mc, 
+                            by = "student", all.x = TRUE)
+edutech_data_fall15 = merge(x = edutech_data_fall15, y = survey_fall15_eoc, 
+                            by = "student", all.x = TRUE)
+
+edutech_data_spr16 = merge(x = survey_spr16_soc, y = survey_spr16_qc, 
+                           by = "student", all.x = TRUE)
+edutech_data_spr16 = merge(x = edutech_data_spr16, y = survey_spr16_mc, 
+                           by = "student", all.x = TRUE)
+edutech_data_spr16 = merge(x = edutech_data_spr16, y = survey_spr16_eoc, 
+                           by = "student", all.x = TRUE)
+edutech_data_spr16 = merge(x = edutech_data_spr16, y = grades_spr16, 
+                           by = "student", all.x = TRUE)
+
+edutech_data_fall16 = merge(x = survey_fall16_soc, y = survey_fall16_qc, 
+                            by = "student", all.x = TRUE)
+edutech_data_fall16 = merge(x = edutech_data_fall16, y = survey_fall16_mc, 
+                            by = "student", all.x = TRUE)
+edutech_data_fall16 = merge(x = edutech_data_fall16, y = survey_fall16_eoc, 
+                            by = "student", all.x = TRUE)
+edutech_data_fall16 = merge(x = edutech_data_fall16, y = grades_fall16, 
+                            by = "student", all.x = TRUE)
+
+# Add dummy columns to Fall 15 data
+edutech_data_fall15$assign_ave = NA
+edutech_data_fall15$milestone_ave = NA
+edutech_data_fall15$project_ave = NA
+edutech_data_fall15$total = NA
+
+edutech_data_fall15$semester = "Fall 2015"
+edutech_data_spr16$semester = "Spring 2016"
+edutech_data_fall16$semester = "Fall 2016"
+
+edutech = rbind(edutech_data_fall15, edutech_data_spr16, edutech_data_fall16)
+
+# Drop unneeded datasets
+rm(survey_fall15_soc, survey_fall15_qc, survey_fall15_mc, survey_fall15_eoc, 
+   survey_spr16_soc, survey_spr16_qc, survey_spr16_mc, survey_spr16_eoc,
+   survey_fall16_soc, survey_fall16_qc, survey_fall16_mc, survey_fall16_eoc,
+   edutech_data_fall15, edutech_data_spr16, edutech_data_fall16, grades_fall16,
+   grades_spr16)
+
+# Drop blank rows
+edutech = subset(edutech, student != "")
+
+# Replace blanks with NA
+is.na(edutech) = (edutech=="")
+
+# Convert factors into character strings
+edutech$student = as.character(edutech$student)
+edutech$birth = as.character(edutech$birth)
+edutech$residence = as.character(edutech$residence)
+edutech$language = as.character(edutech$language)
+
+# Drop blank factor levels
+edutech$age = factor(edutech$age)
+edutech$gender = factor(edutech$gender)
+edutech$english = factor(edutech$english)
+edutech$education = factor(edutech$education)
+edutech$conf_p1_post = factor(edutech$conf_p1_post)
+edutech$conf_p2_pre = factor(edutech$conf_p2_pre)
+edutech$conf_p2_post = factor(edutech$conf_p2_post)
+edutech$conf_p3_pre = factor(edutech$conf_p3_pre)
+edutech$conf_p3_post = factor(edutech$conf_p3_post)
+edutech$hours = factor(edutech$hours)
+
+# Simplify level names
+edutech$age = revalue(edutech$age, c("No Answer" = NA))
+edutech$gender = revalue(edutech$gender, c("No Answer" = NA))
+edutech$english = revalue(edutech$english, c("Native speaker"="Native", 
+                          "Fully fluent (non-native speaker)"="Fluent",
+                          "Partially fluent" = "Partial", "No Answer" = NA))
+
+edutech$education = revalue(edutech$education, c("Bachelors Degree"="Bachelors", 
+                        "Doctoral Degree"="Doctorate", 
+                        "High School (or international equivalent)"="High School",
+                        "Masters Degree" = "Masters", "No Answer" = NA))
+
+edutech$conf_p1_post = revalue(edutech$conf_p1_post, c("Very confident" = 5, 
+                      "Somewhat confident" = 4, "Neither confident nor unconfident" = 3,
+                      "Somewhat unconfident" = 2, "Very unconfident" = 1))
+
+edutech$conf_p2_pre = revalue(edutech$conf_p2_pre, c("Very confident" = 5, 
+                      "Somewhat confident" = 4, "Neither confident nor unconfident" = 3,
+                      "Somewhat unconfident" = 2, "Very unconfident" = 1))
+
+edutech$conf_p2_post = revalue(edutech$conf_p2_post, c("Very confident" = 5, 
+                      "Somewhat confident" = 4, "Neither confident nor unconfident" = 3,
+                      "Somewhat unconfident" = 2, "Very unconfident" = 1, "No Answer" = NA))
+                               
+edutech$conf_p3_pre = revalue(edutech$conf_p3_pre, c("Very confident" = 5, 
+                      "Somewhat confident" = 4, "Neither confident nor unconfident" = 3,
+                      "Somewhat unconfident" = 2, "Very unconfident" = 1))
+
+edutech$conf_p3_post = revalue(edutech$conf_p3_post, c("Very confident" = 5, 
+                      "Somewhat confident" = 4, "Neither confident nor unconfident" = 3,
+                      "Somewhat unconfident" = 2, "Very unconfident" = 1, "No Answer" = NA))
+
+edutech$hours = revalue(edutech$hours, c("No Answer" = NA))
+
+edutech$hours = factor(edutech$hours, levels = c("0-3", "3-6", "6-9", "9-12", "12-15",
+                          "15-18", "18-21", "21+"))
+
+edutech$age = factor(edutech$age, levels = c("Under 18", "18 to 24", "25 to 34", 
+                                             "35 to 44", "45 to 54", "55 to 64"))
+
+# Create function for removing "1:" from text fields and convert to title case
+text_split = function(x){
+  x = unlist(strsplit(x, ": "))[2]
+  return(toTitleCase(x))
+}
+
+# Remove "1:" from text fields
+edutech$birth = sapply(edutech$birth, text_split)
+edutech$residence = sapply(edutech$residence, text_split)
+edutech$language = sapply(edutech$language, text_split)
+
+# Get lists of unique values
+#unique(edutech$birth)
+#unique(edutech$residence)
+#unique(edutech$language)
+
+# Clean birth country names
+edutech$birth = ifelse(edutech$birth %in% c("United States", "USA", "U.S.A.", "US", "Usa",
+                    "Us", "The United States of America", "uSA", "United States of America",
+                    "U.S.", "U.S", "Denver City, Tx", "Ethiopia - US Army Base"), "USA",
+                    edutech$birth)
+
+edutech$birth = ifelse(edutech$birth %in% c("India", "INDIA"), "India", edutech$birth)
+edutech$birth = ifelse(edutech$birth %in% c("China", "People's Republic of China",
+                    "P.R.CHINA", "Hong Kong, SAR", "Hong Kong", "CHINA", "China P.R."),
+                    "China", edutech$birth)
+edutech$birth = ifelse(edutech$birth %in% c("South Korea", "Korea"), "Korea", edutech$birth)
+edutech$birth = ifelse(edutech$birth %in% c("Addis Ababa", "Ethiopia"), "Ethiopia",
+                       edutech$birth)
+edutech$birth = ifelse(edutech$birth %in% c("United Kingdom", "England"), "UK",
+                       edutech$birth)
+edutech$birth = ifelse(edutech$birth == "NA", NA, edutech$birth)
+
+
+# Clean residence country names
+edutech$residence = ifelse(edutech$residence %in% c("United States", "USA", "U.S.A.", 
+                    "US", "Usa",
+                    "The United States of America", "uSA", "United States of America",
+                    "United State", "USa", "Los Angeles", "Houston", "U.S", "U.S.", "YSA",
+                    "Us", "United STates", "America"), "USA", edutech$residence)
+
+edutech$residence = ifelse(edutech$residence == "NA", NA, edutech$residence)
+edutech$residence = ifelse(edutech$residence == "Myanmar, Hong Kong", "Myanmar",
+                           edutech$residence)
+edutech$residence = ifelse(edutech$residence %in% c("China", "Hong Kong"), "China",
+                           edutech$residence)
+
+# Clean language
+edutech$language = ifelse(edutech$language %in% c("English", "American English", "ENGLISH",
+                  "American", "English (US)", "English Language", "Englist", 
+                  "C++, but you Probably Mean \"English\"", "ENGLISH", "En", "JavaScript",
+                  "Elijah", "Dallas"), "English", edutech$language)
+edutech$language = ifelse(edutech$language %in% c("Chinese", "Mandarin", "China", 
+                  "Mandarin Chinese", "Cantonese", "Chiinese", "CHINESE", "Manderin", 
+                  "Java", "Python"), "Chinese", edutech$language)
+edutech$language = ifelse(edutech$language %in% c("Marathi", "Telugu", "Bengali", "Gujarati",
+                  "Kannada", "Hindi", "Tamil", "Odiya", "TAMIL", "Punjabi", "Hindo"),
+                  "Indian", edutech$language)
+edutech$language = ifelse(edutech$language == "Farsi/English", "Farsi", edutech$language)
+edutech$language = ifelse(edutech$language == "Spanish/English", "Spanish", edutech$language)
+edutech$language = ifelse(edutech$language == "NA", NA, edutech$language)
+
+# Create factors
+edutech$birth = factor(edutech$birth)
+edutech$residence = factor(edutech$residence)
+edutech$language = factor(edutech$language)
+edutech$semester = factor(edutech$semester)
+
+# Convert confidence scores to numeric
+edutech$conf_p1_post = as.numeric(as.character(edutech$conf_p1_post))
+edutech$conf_p2_pre = as.numeric(as.character(edutech$conf_p2_pre))
+edutech$conf_p2_post = as.numeric(as.character(edutech$conf_p2_post))
+edutech$conf_p3_pre = as.numeric(as.character(edutech$conf_p3_pre))
+edutech$conf_p3_post = as.numeric(as.character(edutech$conf_p3_post))
+
+# Calculate average confidence scores
+edutech$conf_ave = (edutech$conf_p1_post + edutech$conf_p2_pre + edutech$conf_p2_post + 
+                   edutech$conf_p3_pre + edutech$conf_p3_post)/5
+
+edutech$conf_pre_ave = (edutech$conf_p2_pre + edutech$conf_p3_pre)/2
+
+edutech$conf_post_ave = (edutech$conf_p1_post + edutech$conf_p2_post +
+                           edutech$conf_p3_post)/3
+
+# Convert ranges to numeric values
+edutech$age_num = revalue(edutech$age, c("18 to 24"=21, "25 to 34"=29.5, "35 to 44"=39.5, 
+                                       "45 to 54"=49.5, "55 to 64"=59.5, "Under 18" = 18))
+edutech$age_num = as.numeric(as.character(edutech$age_num))
+
+edutech$hours_num = revalue(edutech$hours, c("0-3"=1.5, "3-6"=4.5, "6-9"=7.5, "9-12"=10.5, 
+                  "12-15"=13.5, "15-18"=16.5, "18-21"=19.5, "21+"=21))
+edutech$hours_num = as.numeric(as.character(edutech$hours_num))
+
+# Create indicator variables
+edutech$native_ind = ifelse(edutech$english == "Native", 1, 0)
+edutech$higher_ind = ifelse(edutech$education %in% c("Masters", "Doctorate"), 1, 0)
+edutech$gender_ind = ifelse(edutech$gender == "Male", 1, 0)
+
+```
+
+###Explore Data###
+```{r Calculate summary statistics}
+
+# Calculate summary statistics
+summary(edutech)
+
+# Calculate proportion of class by gender
+prop.table(table(edutech$gender))
+
+```
+
+###Analyze Data by Gender###
+```{r Calculate summary statistics by gender}
+
+# Calculate age summary statistics
+ddply(subset(edutech, !is.na(age_num) & !is.na(gender)), "gender", summarise, 
+      mean = mean(age_num), 
+      sd = sd(age_num), median = median(age_num), first_q = quantile(age_num, 0.25),
+      third_q = quantile(age_num, 0.75))
+
+# Calculate study hours summary statistics
+ddply(subset(edutech, !is.na(gender)&!is.na(hours_num)), "gender", summarise, 
+             mean = mean(hours_num), sd = sd(hours_num), median = median(hours_num), 
+             first_q = quantile(hours_num, 0.25), third_q = quantile(hours_num, 0.75))
+
+# Calculate confidence summary statistics
+ddply(subset(edutech, !is.na(gender)&!is.na(conf_ave)), "gender", summarise, 
+             mean = mean(conf_ave), sd = sd(conf_ave), median = median(conf_ave), 
+             first_q = quantile(conf_ave, 0.25), third_q = quantile(conf_ave, 0.75))
+
+# Calculate confidence summary statistics
+ddply(subset(edutech, !is.na(gender)&!is.na(conf_pre_ave)), "gender", summarise, 
+             mean = mean(conf_pre_ave), sd = sd(conf_pre_ave), median = median(conf_pre_ave),
+             first_q = quantile(conf_pre_ave, 0.25), third_q = quantile(conf_pre_ave, 0.75))
+
+ddply(subset(edutech, !is.na(gender)&!is.na(conf_post_ave)), "gender", summarise, 
+             mean = mean(conf_post_ave), sd = sd(conf_post_ave), 
+             median = median(conf_post_ave), first_q = quantile(conf_post_ave, 0.25), 
+             third_q = quantile(conf_post_ave, 0.75))
+
+```
+
+
+```{r Compare proportion of the class in each category by gender}
+
+edutech_m = subset(edutech, gender == "Male")
+edutech_f = subset(edutech, gender == "Female")
+
+# Compare age
+prop.table(table(edutech_m$age))
+prop.table(table(edutech_f$age))
+
+# Compare birth country
+prop.table(table(edutech_m$birth))
+prop.table(table(edutech_f$birth))
+
+# Compare country of residence
+prop.table(table(edutech_m$residence))
+prop.table(table(edutech_f$residence))
+
+# Compare language background
+prop.table(table(edutech_m$language))
+prop.table(table(edutech_f$language))
+
+# Compare English skills
+prop.table(table(edutech_m$english))
+prop.table(table(edutech_f$english))
+
+# Compare education
+prop.table(table(edutech_m$education))
+prop.table(table(edutech_f$education))
+
+# Compare hours
+prop.table(table(edutech_m$hours))
+prop.table(table(edutech_f$hours))
+
+```
+
+```{r Create graphs comparing distributions by gender}
+
+#Boxplot of age distribution by gender
+ggplot(subset(edutech, !is.na(gender)), aes(gender, age_num)) + 
+ geom_boxplot() + 
+ labs(title = "Age Distribution by Gender",
+      x = "Gender", y = "Age") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of hours spent studying by gender
+ggplot(subset(edutech, !is.na(hours_num) & !is.na(gender)), aes(gender, hours_num)) + 
+  geom_boxplot() + 
+ labs(title = "Study Hours Distribution by Gender",
+      x = "Gender", y = "Study Hours") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of confidence score by gender
+ggplot(subset(edutech, !is.na(conf_ave) & !is.na(gender)), aes(gender, conf_ave)) + 
+  geom_boxplot() + 
+ labs(title = "Confidence Score Distribution by Gender",
+      x = "Gender", y = "Average Confidence Score") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of confidence score (pre-project) by gender
+ggplot(subset(edutech, !is.na(conf_pre_ave) & !is.na(gender)), aes(gender,
+    conf_pre_ave)) +  geom_boxplot() + 
+ labs(title = "Confidence Score (Pre-Project) Distribution by Gender",
+      x = "Gender", y = "Average Pre-Project Confidence Score") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of confidence score (post-project) by gender
+ggplot(subset(edutech, !is.na(conf_post_ave) & !is.na(gender)), aes(gender,
+    conf_post_ave)) +  geom_boxplot() + 
+ labs(title = "Confidence Score (Post-Project) Distribution by Gender",
+      x = "Gender", y = "Average Post-Project Confidence Score") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Bar chart comparing age by gender
+ggplot(subset(edutech, !is.na(gender)), aes(x = age)) + 
+    geom_bar(fill = "blue") + 
+    facet_wrap(~gender, scales = "free_y") +
+    labs(title = "Age Distribution by Gender",
+      x = "Age Band", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Bar chart comparing English skills by gender
+ggplot(subset(edutech, !is.na(gender)), aes(x = english)) + 
+    geom_bar(fill = "blue") + 
+    facet_wrap(~gender, scales = "free_y") +
+    labs(title = "English Skills by Gender",
+      x = "English Skills", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Bar chart comparing education by gender
+ggplot(subset(edutech, !is.na(gender)), aes(x = education)) + 
+    geom_bar(fill = "blue") + 
+    facet_wrap(~gender, scales = "free_y") +
+    labs(title = "Highest Education Level by Gender",
+      x = "Highest Level of Educational Attainment", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of conf_ave by gender
+ggplot(subset(edutech, !is.na(gender)), aes(x = conf_ave)) + 
+    geom_histogram(fill = "blue", binwidth = 0.5) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Confidence Score Distribution by Gender",
+      x = "Average Confidence Score", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of conf_pre_ave by gender
+ggplot(subset(edutech, !is.na(gender)), aes(x = conf_pre_ave)) + 
+    geom_histogram(fill = "blue", binwidth = 0.5) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Pre-Project Confidence Score Distribution by Gender",
+      x = "Average Pre-Project Confidence Score", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of conf_post_ave by gender
+ggplot(subset(edutech, !is.na(gender)), aes(x = conf_post_ave)) + 
+    geom_histogram(fill = "blue", binwidth = 0.5) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Post-Project Confidence Score Distribution by Gender",
+      x = "Average Post-Project Confidence Score", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of study hours by gender
+ggplot(subset(edutech, !is.na(gender)), aes(x = hours_num)) + 
+    geom_histogram(fill = "blue", binwidth = 1) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Study Hours Distribution by Gender",
+      x = "Average Hours Spent Studying per Week", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+```
+
+```{r Hypothesis tests to compare grades and mean age by gender}
+
+# Age tests
+t.test(edutech_m$age_num, edutech_f$age_num)
+wilcox.test(age_num ~ gender, data=edutech) 
+
+# Higher ed tests
+t.test(edutech_m$higher_ind, edutech_f$higher_ind)
+wilcox.test(higher_ind ~ gender, data=edutech) 
+
+# Native speaker test
+t.test(edutech_m$native_ind, edutech_f$native_ind)
+wilcox.test(native_ind ~ gender, data=edutech) 
+
+# Average confidence score tests
+t.test(edutech_m$conf_ave, edutech_f$conf_ave)
+wilcox.test(conf_ave ~ gender, data=edutech) 
+
+# Average pre-project confidence score tests
+t.test(edutech_m$conf_pre_ave, edutech_f$conf_pre_ave)
+wilcox.test(conf_pre_ave ~ gender, data=edutech) 
+
+# Average post-project confidence score tests
+t.test(edutech_m$conf_post_ave, edutech_f$conf_post_ave)
+wilcox.test(conf_post_ave ~ gender, data=edutech) 
+
+# Study hours
+t.test(edutech_m$hours_num, edutech_f$hours_num)
+wilcox.test(hours_num ~ gender, data=edutech)
+
+# Total grade
+t.test(edutech_m$total, edutech_f$total)
+wilcox.test(total ~ gender, data=edutech)
+
+```
+
+
+```{r Fit regression models}
+
+# Check for multicollinearity
+cor_subset = edutech[, c("age_num", "native_ind", "higher_ind", "gender_ind")]
+cor(na.omit(cor_subset))
+
+# Fit regression to confidence score
+conf_lm = lm(conf_ave~gender + age_num + native_ind + higher_ind + semester,
+             data=na.omit(edutech))
+
+summary(conf_lm)
+
+# Fit regression to pre-project confidence score
+conf_pre_lm = lm(conf_pre_ave~gender + age_num + native_ind + higher_ind + semester,
+             data=na.omit(edutech))
+
+summary(conf_pre_lm)
+
+# Fit regression to post-project confidence score
+conf_post_lm = lm(conf_post_ave~gender + age_num + native_ind + higher_ind + semester,
+             data=na.omit(edutech))
+
+summary(conf_post_lm)
+
+# Fit regression to study hours
+hours_lm = lm(hours_num~gender + age_num + native_ind + higher_ind + semester,
+             data=na.omit(edutech))
+
+summary(hours_lm)
+
+# Fit regression to grade
+grades_lm = lm(total~gender + age_num + native_ind + higher_ind + semester,
+             data=na.omit(edutech))
+
+summary(grades_lm)
+
+```

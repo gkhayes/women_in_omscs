@@ -1,0 +1,711 @@
+---
+title: "Educational Technology Project - KBAI (Summer 2015 and Summer 2016) Data Analysis"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+###Process Data###
+```{r setup, echo=TRUE, results='hide', warning=FALSE}
+
+# Set cwd
+setwd("D:/Documents/Data Science/Educational Technology/R/KBAI")
+getwd()
+
+# Load libraries
+library(plyr)
+library(tools)
+library(ggplot2)
+
+# Read in survey data sets
+survey_sum15_soc = read.csv('Survey_CS7637_SUM15_SOC.csv')
+survey_sum15_qc = read.csv('Survey_CS7637_SUM15_QC.csv')
+survey_sum15_mc = read.csv('Survey_CS7637_SUM15_MC.csv')
+survey_sum15_eoc = read.csv('Survey_CS7637_SUM15_EOC.csv')
+
+survey_sum16_soc = read.csv('Survey_CS7637_SUM16_SOC.csv')
+survey_sum16_qc = read.csv('Survey_CS7637_SUM16_QC.csv')
+survey_sum16_mc = read.csv('Survey_CS7637_SUM16_MC.csv')
+survey_sum16_eoc = read.csv('Survey_CS7637_SUM16_EOC.csv')
+
+# Read in grade data sets
+grades_sum15 = read.csv('Grades_CS7637_SUM15.csv', na.strings="")
+grades_sum16 = read.csv('Grades_CS7637_SUM16.csv', na.strings="")
+```
+
+```{r process data, echo=TRUE, results = 'hide'}
+
+# Create data subsets containing information of interest and change names
+survey_sum15_soc = survey_sum15_soc[, c(1, 2, 3, 4, 5, 7, 8, 16, 20)]
+colnames(survey_sum15_soc) = c("student", "age", "gender", "birth", "residence", 
+                               "language", "english", "education", "programming")
+
+survey_sum16_soc = survey_sum16_soc[, c(1, 2, 3, 4, 5, 7, 8, 11, 15)]
+colnames(survey_sum16_soc) = c("student", "age", "gender", "birth", "residence", 
+                               "language", "english", "education", "programming")
+
+survey_sum15_qc = survey_sum15_qc[, c(1, 4, 5)]
+colnames(survey_sum15_qc) = c("student", "conf_p1_post", "conf_p2_pre")
+
+survey_sum16_qc = survey_sum16_qc[, c(1, 3, 4)]
+colnames(survey_sum16_qc) = c("student", "conf_p1_post", "conf_p2_pre")
+
+survey_sum15_mc = survey_sum15_mc[, c(1, 4, 5)]
+colnames(survey_sum15_mc) = c("student", "conf_p2_post", "conf_p3_pre")
+
+survey_sum16_mc = survey_sum16_mc[, c(1, 3, 4)]
+colnames(survey_sum16_mc) = c("student", "conf_p2_post", "conf_p3_pre")
+
+survey_sum15_eoc = survey_sum15_eoc[, c(1, 2, 3)]
+colnames(survey_sum15_eoc) = c("student", "conf_p3_post", "hours")
+
+survey_sum16_eoc = survey_sum16_eoc[, c(1, 2, 3)]
+colnames(survey_sum16_eoc) = c("student", "conf_p3_post", "hours")
+
+
+colnames(grades_sum15) = c("student", "assign1", "assign2", "proj1", "assign3", "assign4",
+                           "proj2", "assign5", "assign6", "proj3", "exam", "feedback") 
+
+colnames(grades_sum16) = c("student", "proj1", "proj2", "proj3", "assign1", "assign2",  
+                           "assign3", "assign4", "assign5", "assign6",  "exam", "feedback") 
+
+# Create grade summary variables
+grades_sum15$assign_ave = 100*(grades_sum15$assign1 + grades_sum15$assign2 +
+                           grades_sum15$assign3 + grades_sum15$assign4 + 
+                           grades_sum15$assign5 + grades_sum15$assign6)/120
+
+
+grades_sum15$proj_ave = 100*(grades_sum15$proj1 + grades_sum15$proj2 +                  
+                         grades_sum15$proj3)/300
+
+grades_sum15$total = (grades_sum15$assign_ave*0.2 + grades_sum15$proj_ave*0.45 + 
+                      grades_sum15$exam*0.2 + (100*grades_sum15$feedback/15)*0.15)
+
+grades_sum16$assign_ave = 100*(grades_sum16$assign1 + grades_sum16$assign2 +
+                           grades_sum16$assign3 + grades_sum16$assign4 + 
+                           grades_sum16$assign5 + grades_sum16$assign6)/120
+
+
+grades_sum16$proj_ave = 100*(grades_sum16$proj1 + grades_sum16$proj2 +                  
+                         grades_sum16$proj3)/300
+
+grades_sum16$total = (grades_sum16$assign_ave*0.2 + grades_sum16$proj_ave*0.45 + 
+                      grades_sum16$exam*0.2 + (100*grades_sum16$feedback/24)*0.15)
+
+# Drop unnecessary fields from grades dataframes
+grades_sum15 = grades_sum15[,c("student", "exam", "assign_ave", "proj_ave", "total")]
+grades_sum16 = grades_sum16[,c("student", "exam", "assign_ave", "proj_ave", "total")]
+
+# Merge datasets
+kbai_data_sum15 = merge(x = survey_sum15_soc, y = survey_sum15_qc, 
+                        by = "student", all.x = TRUE)
+kbai_data_sum15 = merge(x = kbai_data_sum15, y = survey_sum15_mc, 
+                        by = "student", all.x = TRUE)
+kbai_data_sum15 = merge(x = kbai_data_sum15, y = survey_sum15_eoc, 
+                        by = "student", all.x = TRUE)
+kbai_data_sum15 = merge(x = kbai_data_sum15, y = grades_sum15, 
+                        by = "student", all.x = TRUE)
+
+
+kbai_data_sum16 = merge(x = survey_sum16_soc, y = survey_sum16_qc, 
+                        by = "student", all.x = TRUE)
+kbai_data_sum16 = merge(x = kbai_data_sum16, y = survey_sum16_mc, 
+                        by = "student", all.x = TRUE)
+kbai_data_sum16 = merge(x = kbai_data_sum16, y = survey_sum16_eoc, 
+                        by = "student", all.x = TRUE)
+kbai_data_sum16 = merge(x = kbai_data_sum16, y = grades_sum16, 
+                        by = "student", all.x = TRUE)
+
+kbai_data_sum15$semester = "Summer 2015"
+kbai_data_sum16$semester = "Summer 2016"
+
+kbai = rbind(kbai_data_sum15, kbai_data_sum16)
+
+# Drop unneeded datasets
+rm(grades_sum15, grades_sum16, kbai_data_sum15, kbai_data_sum16, survey_sum15_eoc,
+   survey_sum15_mc, survey_sum15_qc, survey_sum15_soc, survey_sum16_eoc, survey_sum16_mc,
+   survey_sum16_qc, survey_sum16_soc)
+
+# Replace blanks with NA
+is.na(kbai) = (kbai=="")
+
+# Convert factors into character strings
+kbai$student = as.character(kbai$student)
+kbai$birth = as.character(kbai$birth)
+kbai$residence = as.character(kbai$residence)
+kbai$language = as.character(kbai$language)
+
+# Drop blank factor levels
+kbai$age = factor(kbai$age)
+kbai$gender = factor(kbai$gender)
+kbai$english = factor(kbai$english)
+kbai$education = factor(kbai$education)
+kbai$programming = factor(kbai$programming)
+kbai$conf_p1_post = factor(kbai$conf_p1_post)
+kbai$conf_p2_pre = factor(kbai$conf_p2_pre)
+kbai$conf_p2_post = factor(kbai$conf_p2_post)
+kbai$conf_p3_pre = factor(kbai$conf_p3_pre)
+kbai$conf_p3_post = factor(kbai$conf_p3_post)
+kbai$hours = factor(kbai$hours)
+
+# Simplify level names
+kbai$english = revalue(kbai$english, c("Native speaker"="Native", 
+                          "Fully fluent (non-native speaker)"="Fluent",
+                          "Partially fluent" = "Partial", "No Answer" = NA))
+
+kbai$education = revalue(kbai$education, c("Bachelors Degree"="Bachelors", 
+                        "Doctoral Degree"="Doctorate", 
+                        "High School (or international equivalent)"="High School",
+                        "Masters Degree" = "Masters", "No Answer" = NA))
+
+kbai$programming = revalue(kbai$programming, c("No Answer" = NA))
+
+kbai$conf_p1_post = revalue(kbai$conf_p1_post, c("Very confident" = 5, "Somewhat confident"
+                      = 4, "Neither confident nor unconfident" = 3, "Somewhat unconfident"
+                      = 2, "Very unconfident" = 1, "No Answer" = NA))
+
+kbai$conf_p2_pre = revalue(kbai$conf_p2_pre, c("Very confident" = 5, "Somewhat confident"
+                      = 4, "Neither confident nor unconfident" = 3, "Somewhat unconfident"
+                      = 2, "Very unconfident" = 1, "No Answer" = NA))
+
+kbai$conf_p2_post = revalue(kbai$conf_p2_post, c("Very confident" = 5, "Somewhat confident"
+                      = 4, "Neither confident nor unconfident" = 3, "Somewhat unconfident"
+                      = 2, "Very unconfident" = 1, "No Answer" = NA))
+
+kbai$conf_p3_pre = revalue(kbai$conf_p3_pre, c("Very confident" = 5, "Somewhat confident"
+                      = 4, "Neither confident nor unconfident" = 3, "Somewhat unconfident"
+                      = 2, "Very unconfident" = 1, "No Answer" = NA))
+
+kbai$conf_p3_post = revalue(kbai$conf_p3_post, c("Very confident" = 5, "Somewhat confident"
+                      = 4, "Neither confident nor unconfident" = 3, "Somewhat unconfident"
+                      = 2, "Very unconfident" = 1))
+
+kbai$hours = revalue(kbai$hours, c("<3 hours per week" = "0-3", "3 - 6 hours per week" = 
+                "3-6", "6 - 9 hours per week" = "6-9", "9 - 12 hours per week" = 
+                "9-12", "12 - 15 hours per week" = "12-15", "15 - 18 hours per week" =
+                "15-18", "18 - 21 hours per week" = "18-21", "21 or more hours per week" =
+                "21+"))
+kbai$hours = factor(kbai$hours, levels = c("0-3", "3-6", "6-9", "9-12", "12-15", "15-18",
+                  "18-21", "21+"))
+
+kbai$programming = factor(kbai$programming, levels = c("0", "1-3", "3-5", "5-10", 
+                      "10-15", "15-20", "20+"))
+
+# Create function for removing "1:" from text fields and convert to title case
+text_split = function(x){
+  x = unlist(strsplit(x, ": "))[2]
+  return(toTitleCase(x))
+}
+
+# Remove "1:" from text fields
+kbai$birth = sapply(kbai$birth, text_split)
+kbai$residence = sapply(kbai$residence, text_split)
+kbai$language = sapply(kbai$language, text_split)
+
+# Get lists of unique values
+#unique(kbai$birth)
+#unique(kbai$residence)
+#unique(kbai$language)
+
+# Clean birth country names
+kbai$birth = ifelse(kbai$birth %in% c("United States", "USA", "U.S.A.", "US", "Usa", "Us", 
+                    "The United States of America", "uSA", "United States of America",
+                    "U.S.", "U.S"), "USA", kbai$birth)
+
+kbai$birth = ifelse(kbai$birth %in% c("India", "INDIA"), "India", kbai$birth)
+kbai$birth = ifelse(kbai$birth %in% c("China", "People's Republic of China", "P.R.CHINA", 
+                                      "Hong Kong, SAR", "Hong Kong"), "China", kbai$birth)
+kbai$birth = ifelse(kbai$birth %in% c("South Korea", "Korea"), "Korea", kbai$birth)
+kbai$birth = ifelse(kbai$birth %in% c("Addis Ababa", "Ethiopia"), "Ethiopia", kbai$birth)
+kbai$birth = ifelse(kbai$birth == "NA", NA, kbai$birth)
+
+# Clean residence country names
+kbai$residence = ifelse(kbai$residence %in% c("United States", "USA", "U.S.A.", "US", "Usa",
+                    "The United States of America", "uSA", "United States of America",
+                    "United State", "USa", "Los Angeles", "Houston", "U.S", "U.S.", "YSA",
+                    "Us", "United STates", "America"), "USA", kbai$residence)
+
+kbai$residence = ifelse(kbai$residence == "NA", NA, kbai$residence)
+kbai$residence = ifelse(kbai$residence == "Myanmar, Hong Kong", "Myanmar", kbai$residence)
+kbai$residence = ifelse(kbai$residence %in% c("China", "Hong Kong"), "China", kbai$residence)
+
+# Clean language
+kbai$language = ifelse(kbai$language %in% c("English", "American English", "ENGLISH",
+                  "American", "English (US)", "First", "English Language", 
+                  "English and French", "English, Cantonese", "Java",
+                  "Conative American Sign Language and English"), "English", kbai$language)
+kbai$language = ifelse(kbai$language %in% c("Chinese", "Mandarin", "China", 
+                  "Mandarin Chinese", "Cantonese"), "Chinese", kbai$language)
+kbai$language = ifelse(kbai$language %in% c("Principal", "Korean", "South Korean"), 
+                  "Korean", kbai$language)
+kbai$language = ifelse(kbai$language %in% c("Swiss German", "German", "Germany"), 
+                  "German", kbai$language)
+kbai$language = ifelse(kbai$language %in% c("Marathi", "Telugu", "Bengali", "Gujarati",
+                  "Kannada", "Hindi", "Tamil"), "Indian", kbai$language)
+kbai$language = ifelse(kbai$language %in% c("Thai", "ABAP"), "Thai",
+                  kbai$language)
+kbai$language = ifelse(kbai$language == "NA", NA, kbai$language)
+
+# Create factors
+kbai$birth = factor(kbai$birth)
+kbai$residence = factor(kbai$residence)
+kbai$language = factor(kbai$language)
+kbai$semester = factor(kbai$semester)
+
+# Convert confidence scores to numeric
+kbai$conf_p1_post = as.numeric(as.character(kbai$conf_p1_post))
+kbai$conf_p2_pre = as.numeric(as.character(kbai$conf_p2_pre))
+kbai$conf_p2_post = as.numeric(as.character(kbai$conf_p2_post))
+kbai$conf_p3_pre = as.numeric(as.character(kbai$conf_p3_pre))
+kbai$conf_p3_post = as.numeric(as.character(kbai$conf_p3_post))
+
+# Calculate average confidence scores
+kbai$conf_ave = (kbai$conf_p1_post + kbai$conf_p2_pre + kbai$conf_p2_post + 
+                   kbai$conf_p3_pre + kbai$conf_p3_post)/5
+
+kbai$conf_pre_ave = (kbai$conf_p2_pre + kbai$conf_p3_pre)/2
+
+kbai$conf_post_ave = (kbai$conf_p1_post + kbai$conf_p2_post + kbai$conf_p3_post)/3
+
+# Convert ranges to numeric values
+kbai$age_num = revalue(kbai$age, c("18 to 24"=21, "25 to 34"=29.5, "35 to 44"=39.5, 
+                                       "45 to 54"=49.5, "55 to 64"=59.5))
+kbai$age_num = as.numeric(as.character(kbai$age_num))
+
+kbai$prog_num = revalue(kbai$programming, c("0"=0, "1-3"=2, "3-5"=4, "5-10"=7.5, 
+                  "10-15"=12.5, "15-20"=17.5, "20+"=20))
+kbai$prog_num = as.numeric(as.character(kbai$prog_num))
+
+kbai$hours_num = revalue(kbai$hours, c("0-3"=1.5, "3-6"=4.5, "6-9"=7.5, "9-12"=10.5, 
+                  "12-15"=13.5, "15-18"=16.5, "18-21"=19.5, "21+"=21))
+kbai$hours_num = as.numeric(as.character(kbai$hours_num))
+
+# Create indicator for withdrawing from course
+kbai$w_ind = ifelse(kbai$exam==0, 1, 0)
+
+# Create other indicator variables 
+kbai$native_ind = ifelse(kbai$english == "Native", 1, 0)
+kbai$higher_ind = ifelse(kbai$education %in% c("Masters", "Doctorate"), 1, 0)
+kbai$gender_ind = ifelse(kbai$gender == "Male", 1, 0)
+
+```
+
+###Explore Data###
+```{r Calculate summary statistics}
+
+# Calculate summary statistics
+summary(kbai)
+
+# Calculate proportion of class by gender
+prop.table(table(kbai$gender))
+
+```
+
+###Analyze Data by Gender###
+```{r Calculate summary statistics by gender}
+
+# Calculate age summary statistics
+ddply(subset(kbai, !is.na(age_num)), "gender", summarise, mean = mean(age_num), 
+      sd = sd(age_num), median = median(age_num), first_q = quantile(age_num, 0.25),
+      third_q = quantile(age_num, 0.75))
+
+# Calculate overall grade summary statistics
+ddply(subset(kbai, !is.na(gender)&!is.na(total)&w_ind==0), "gender", summarise, mean = 
+        mean(total), sd = sd(total), median = median(total), first_q = 
+        quantile(total, 0.25), third_q = quantile(total, 0.75))
+
+# Calculate assignment summary statistics
+ddply(subset(kbai, !is.na(gender)&!is.na(assign_ave)&w_ind==0), "gender", summarise, 
+             mean = mean(assign_ave), sd = sd(assign_ave), median = median(assign_ave), 
+             first_q = quantile(assign_ave, 0.25), third_q = quantile(assign_ave, 0.75))
+
+# Calculate project summary statistics
+ddply(subset(kbai, !is.na(gender)&!is.na(proj_ave)&w_ind==0), "gender", summarise, 
+             mean = mean(proj_ave), sd = sd(proj_ave), median = median(proj_ave), 
+             first_q = quantile(proj_ave, 0.25), third_q = quantile(proj_ave, 0.75))
+
+# Calculate final exam summary statistics
+ddply(subset(kbai, !is.na(gender)&!is.na(exam)&w_ind==0), "gender", summarise, 
+             mean = mean(exam), sd = sd(exam), median = median(exam), 
+             first_q = quantile(exam, 0.25), third_q = quantile(exam, 0.75))
+
+# Calculate programming years summary statistics
+ddply(subset(kbai, !is.na(gender)&!is.na(prog_num)), "gender", summarise, 
+             mean = mean(prog_num), sd = sd(prog_num), median = median(prog_num), 
+             first_q = quantile(prog_num, 0.25), third_q = quantile(prog_num, 0.75))
+
+# Calculate study hours summary statistics
+ddply(subset(kbai, !is.na(gender)&!is.na(hours_num)&w_ind==0), "gender", summarise, 
+             mean = mean(hours_num), sd = sd(hours_num), median = median(hours_num), 
+             first_q = quantile(hours_num, 0.25), third_q = quantile(hours_num, 0.75))
+
+# Calculate confidence summary statistics
+ddply(subset(kbai, !is.na(gender)&!is.na(conf_ave)&w_ind==0), "gender", summarise, 
+             mean = mean(conf_ave), sd = sd(conf_ave), median = median(conf_ave), 
+             first_q = quantile(conf_ave, 0.25), third_q = quantile(conf_ave, 0.75))
+
+# Calculate confidence summary statistics
+ddply(subset(kbai, !is.na(gender)&!is.na(conf_pre_ave)&w_ind==0), "gender", summarise, 
+             mean = mean(conf_pre_ave), sd = sd(conf_pre_ave), median = median(conf_pre_ave),
+             first_q = quantile(conf_pre_ave, 0.25), third_q = quantile(conf_pre_ave, 0.75))
+
+ddply(subset(kbai, !is.na(gender)&!is.na(conf_post_ave)&w_ind==0), "gender", summarise, 
+             mean = mean(conf_post_ave), sd = sd(conf_post_ave), 
+             median = median(conf_post_ave), first_q = quantile(conf_post_ave, 0.25), 
+             third_q = quantile(conf_post_ave, 0.75))
+
+```
+
+```{r Compare proportion of the class in each category by gender}
+
+kbai_m = subset(kbai, gender == "Male")
+kbai_f = subset(kbai, gender == "Female")
+
+# Compare age
+prop.table(table(kbai_m$age))
+prop.table(table(kbai_f$age))
+
+# Compare birth country
+prop.table(table(kbai_m$birth))
+prop.table(table(kbai_f$birth))
+
+# Compare country of residence
+prop.table(table(kbai_m$residence))
+prop.table(table(kbai_f$residence))
+
+# Compare language background
+prop.table(table(kbai_m$language))
+prop.table(table(kbai_f$language))
+
+# Compare English skills
+prop.table(table(kbai_m$english))
+prop.table(table(kbai_f$english))
+
+# Compare education
+prop.table(table(kbai_m$education))
+prop.table(table(kbai_f$education))
+
+# Compare programming skills
+prop.table(table(kbai_m$programming))
+prop.table(table(kbai_f$programming))
+
+# Compare hours
+prop.table(table(kbai_m$hours))
+prop.table(table(kbai_f$hours))
+
+# Compare drop-out rates
+prop.table(table(kbai_m$w_ind))
+prop.table(table(kbai_f$w_ind))
+```
+
+```{r Create graphs comparing distributions by gender}
+
+#Boxplot of age distribution by gender
+ggplot(subset(kbai, !is.na(gender)), aes(gender, age_num)) + 
+ geom_boxplot() + 
+ labs(title = "Age Distribution by Gender",
+      x = "Gender", y = "Age") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of overall grade distribution by gender
+ggplot(subset(kbai, !is.na(total) & !is.na(gender) & w_ind==0), aes(gender, total)) + 
+ geom_boxplot() + 
+ labs(title = "Overall Grade Distribution by Gender",
+      x = "Gender", y = "Overall Grade") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of assignment grade distribution by gender
+ggplot(subset(kbai, !is.na(assign_ave) & !is.na(gender) & w_ind==0), 
+       aes(gender, assign_ave)) + 
+ geom_boxplot() + 
+ labs(title = "Assignment Grade Distribution by Gender",
+      x = "Gender", y = "Average Assignment Grade") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of project grade distribution by gender
+ggplot(subset(kbai, !is.na(proj_ave) & !is.na(gender) & w_ind==0), aes(gender, proj_ave)) + 
+ geom_boxplot() + 
+ labs(title = "Project Grade Distribution by Gender",
+      x = "Gender", y = "Average Project Grade") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of exam grade distribution by gender
+ggplot(subset(kbai, !is.na(exam) & !is.na(gender) & w_ind==0), aes(gender, exam)) + 
+ geom_boxplot() + 
+ labs(title = "Exam Grade Distribution by Gender",
+      x = "Gender", y = "Exam Grade") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of programming experience by gender
+ggplot(subset(kbai, !is.na(prog_num) & !is.na(gender) & w_ind==0), aes(gender, prog_num)) + 
+ geom_boxplot() + 
+ labs(title = "Programming Experience Distribution by Gender",
+      x = "Gender", y = "Programming Experience (Years)") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of hours spent studying by gender
+ggplot(subset(kbai, !is.na(hours_num) & !is.na(gender) & w_ind==0), aes(gender, hours_num)) +
+  geom_boxplot() + 
+ labs(title = "Study Hours Distribution by Gender",
+      x = "Gender", y = "Study Hours") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of confidence score by gender
+ggplot(subset(kbai, !is.na(conf_ave) & !is.na(gender) & w_ind==0), aes(gender, conf_ave)) +
+  geom_boxplot() + 
+ labs(title = "Confidence Score Distribution by Gender",
+      x = "Gender", y = "Average Confidence Score") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of confidence score (pre-project) by gender
+ggplot(subset(kbai, !is.na(conf_pre_ave) & !is.na(gender) & w_ind==0), aes(gender,
+    conf_pre_ave)) +  geom_boxplot() + 
+ labs(title = "Confidence Score (Pre-Project) Distribution by Gender",
+      x = "Gender", y = "Average Pre-Project Confidence Score") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Boxplot of confidence score (post-project) by gender
+ggplot(subset(kbai, !is.na(conf_post_ave) & !is.na(gender) & w_ind==0), aes(gender,
+    conf_post_ave)) +  geom_boxplot() + 
+ labs(title = "Confidence Score (Post-Project) Distribution by Gender",
+      x = "Gender", y = "Average Post-Project Confidence Score") +
+ theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Bar chart comparing age by gender
+ggplot(subset(kbai, !is.na(gender)), aes(x = age)) + 
+    geom_bar(fill = "blue") + 
+    facet_wrap(~gender, scales = "free_y") +
+    labs(title = "Age Distribution by Gender",
+      x = "Age Band", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Bar chart comparing English skills by gender
+ggplot(subset(kbai, !is.na(gender)), aes(x = english)) + 
+    geom_bar(fill = "blue") + 
+    facet_wrap(~gender, scales = "free_y") +
+    labs(title = "English Skills by Gender",
+      x = "English Skills", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Bar chart comparing education by gender
+ggplot(subset(kbai, !is.na(gender)), aes(x = education)) + 
+    geom_bar(fill = "blue") + 
+    facet_wrap(~gender, scales = "free_y") +
+    labs(title = "Highest Education Level by Gender",
+      x = "Highest Level of Educational Attainment", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Bar chart comparing w_ind by gender
+ggplot(subset(kbai, !is.na(gender)), aes(x = w_ind)) + 
+    geom_bar(fill = "blue") + 
+    facet_wrap(~gender, scales = "free_y") +
+    labs(title = "Number of Students Withdrawing by Gender",
+      x = "Withdrawal Indicator", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of grades by gender
+ggplot(subset(kbai, !is.na(gender) & w_ind==0), aes(x = total)) + 
+    geom_histogram(fill = "blue", binwidth = 5) + 
+    facet_wrap(~gender, scales = "free_y") +
+    labs(title = "Grade Distribution by Gender",
+      x = "Overall Grade", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of average assignment grade by gender
+ggplot(subset(kbai, !is.na(gender) & w_ind==0), aes(x = assign_ave)) + 
+    geom_histogram(fill = "blue", binwidth = 5) + 
+    facet_wrap(~gender, scales = "free_y") +
+    labs(title = "Assignment Grade Distribution by Gender",
+      x = "Average Assignment Grade", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of average project grade by gender
+ggplot(subset(kbai, !is.na(gender) & w_ind==0), aes(x = proj_ave)) + 
+    geom_histogram(fill = "blue", binwidth = 5) + 
+    facet_wrap(~gender, scales = "free_y") +
+    labs(title = "Project Grade Distribution by Gender",
+      x = "Average Project Grade", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of exam grade by gender
+ggplot(subset(kbai, !is.na(gender) & w_ind==0), aes(x = exam)) + 
+    geom_histogram(fill = "blue", binwidth = 5) + 
+    facet_wrap(~gender, scales = "free_y") +
+    labs(title = "Exam Grade Distribution by Gender",
+      x = "Exam Grade", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of conf_ave by gender
+ggplot(subset(kbai, !is.na(gender) & w_ind==0), aes(x = conf_ave)) + 
+    geom_histogram(fill = "blue", binwidth = 0.5) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Confidence Score Distribution by Gender",
+      x = "Average Confidence Score", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of conf_pre_ave by gender
+ggplot(subset(kbai, !is.na(gender) & w_ind==0), aes(x = conf_pre_ave)) + 
+    geom_histogram(fill = "blue", binwidth = 0.5) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Pre-Project Confidence Score Distribution by Gender",
+      x = "Average Pre-Project Confidence Score", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of conf_post_ave by gender
+ggplot(subset(kbai, !is.na(gender) & w_ind==0), aes(x = conf_post_ave)) + 
+    geom_histogram(fill = "blue", binwidth = 0.5) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Post-Project Confidence Score Distribution by Gender",
+      x = "Average Post-Project Confidence Score", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of programming experience by gender
+ggplot(subset(kbai, !is.na(gender) & w_ind==0), aes(x = prog_num)) + 
+    geom_histogram(fill = "blue", binwidth = 1) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Programming Experience Distribution by Gender",
+      x = "Average Programming Experience (Years)", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+# Histogram of study hours by gender
+ggplot(subset(kbai, !is.na(gender) & w_ind==0), aes(x = hours_num)) + 
+    geom_histogram(fill = "blue", binwidth = 1) + 
+    facet_wrap(~gender, scale = "free_y") +
+    labs(title = "Study Hours Distribution by Gender",
+      x = "Average Hours Spent Studying per Week", 
+      y = "Observations") +
+    theme(plot.title = element_text(lineheight=.8, face="bold", hjust=0.5))
+
+```
+
+```{r Hypothesis tests to compare grades and mean age by gender}
+
+# Age tests
+t.test(kbai_m$age_num, kbai_f$age_num)
+wilcox.test(age_num ~ gender, data=kbai) 
+
+# Overall grade tests
+t.test(kbai_m$total, kbai_f$total)
+wilcox.test(total ~ gender, data=kbai) 
+
+# Assignment grade tests
+t.test(kbai_m$assign_ave, kbai_f$assign_ave)
+wilcox.test(assign_ave ~ gender, data=kbai) 
+
+# Project grade tests
+t.test(kbai_m$proj_ave, kbai_f$proj_ave)
+wilcox.test(proj_ave ~ gender, data=kbai) 
+
+# Exam grade tests
+t.test(kbai_m$exam, kbai_f$exam)
+wilcox.test(exam ~ gender, data=kbai) 
+
+# Withdrawal rate tests
+t.test(kbai_m$w_ind, kbai_f$w_ind)
+wilcox.test(w_ind ~ gender, data=kbai) 
+
+# Average confidence score tests
+t.test(kbai_m$conf_ave, kbai_f$conf_ave)
+wilcox.test(conf_ave ~ gender, data=kbai) 
+
+# Average pre-project confidence score tests
+t.test(kbai_m$conf_pre_ave, kbai_f$conf_pre_ave)
+wilcox.test(conf_pre_ave ~ gender, data=kbai) 
+
+# Average post-project confidence score tests
+t.test(kbai_m$conf_post_ave, kbai_f$conf_post_ave)
+wilcox.test(conf_post_ave ~ gender, data=kbai) 
+
+# Programming experience tests
+t.test(kbai_m$prog_num, kbai_f$prog_num)
+wilcox.test(prog_num ~ gender, data=kbai) 
+
+# Study hours
+t.test(kbai_m$hours_num, kbai_f$hours_num)
+wilcox.test(hours_num ~ gender, data=kbai)
+
+# Native speaker
+t.test(kbai_m$native_ind, kbai_f$native_ind)
+wilcox.test(native_ind ~ gender, data=kbai) 
+
+# Higher education
+t.test(kbai_m$higher_ind, kbai_f$higher_ind)
+wilcox.test(higher_ind ~ gender, data=kbai) 
+
+```
+
+###Regression Analysis###
+
+```{r Fit regression models}
+
+# Check for multicollinearity
+cor_subset = kbai[, c("age_num", "native_ind", "higher_ind", "gender_ind")]
+cor(na.omit(cor_subset))
+
+# Fit regression to total grade data
+total_lm = lm(total~gender + age_num + native_ind + higher_ind + semester, 
+              data=na.omit(kbai))
+
+summary(total_lm)
+
+# Fit regression to assignment grade data
+assign_lm = lm(assign_ave~gender + age_num + native_ind + higher_ind + semester, 
+              data=na.omit(kbai))
+
+summary(assign_lm)
+
+# Fit regression to project grade data
+project_lm = lm(proj_ave~gender + age_num + native_ind + higher_ind + semester, 
+              data=na.omit(kbai))
+
+summary(project_lm)
+
+# Fit regression to exam grade data
+exam_lm = lm(exam~gender + age_num + native_ind + higher_ind + semester, 
+              data=na.omit(kbai))
+
+summary(exam_lm)
+
+# Fit regression to confidence score
+conf_lm = lm(conf_ave~gender + age_num + native_ind + higher_ind + semester, 
+              data=na.omit(kbai))
+
+summary(conf_lm)
+
+# Fit regression to pre-project confidence score
+conf_pre_lm = lm(conf_pre_ave~gender + age_num + native_ind + higher_ind + semester, 
+              data=na.omit(kbai))
+
+summary(conf_pre_lm)
+
+# Fit regression to post-project confidence score
+conf_post_lm = lm(conf_post_ave~gender + age_num + native_ind + higher_ind + semester, 
+              data=na.omit(kbai))
+
+summary(conf_post_lm)
+
+# Fit regression to programming experience
+prog_lm = lm(prog_num~gender + age_num + native_ind + higher_ind + semester, 
+              data=na.omit(kbai))
+
+summary(prog_lm)
+
+# Fit regression to study hours
+hours_lm = lm(hours_num~gender + age_num + native_ind + higher_ind + semester, 
+              data=na.omit(kbai))
+
+summary(hours_lm)
+
+```
